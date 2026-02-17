@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Plot from "react-plotly.js";
 import ReactMarkdown from "react-markdown";
@@ -10,6 +10,9 @@ import Dashboard from "./components/Dashboard";
 import ChatView from "./components/ChatView";
 import StudyHub from "./components/StudyHub";
 import FolderChatView from "./components/FolderChatView";
+import TermsOfService from "./components/TermsOfService";
+import PrivacyPolicy from "./components/PrivacyPolicy";
+import Flashcards from "./components/Flashcards"; // ✅ NUEVO
 import { getToken, removeToken } from "./auth.js";
 import { normalizeMath } from "./utils/mathUtils";
 import { interpretPlot } from "./utils/plotInterpreter";
@@ -152,6 +155,10 @@ export default function App() {
             }
           />
 
+          {/* Rutas legales - PÚBLICAS */}
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+
           {/* Rutas protegidas */}
           <Route
             path="/dashboard"
@@ -197,6 +204,18 @@ export default function App() {
             }
           />
 
+          {/* ✅ NUEVA RUTA: Flashcards */}
+          <Route
+            path="/folder/:folderId/flashcards"
+            element={
+              isAuthenticated ? (
+                <Flashcards />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
           {/* 404 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -205,13 +224,8 @@ export default function App() {
   );
 }
 
-// ===== LANDING PAGE RESTAURADO =====
+// ===== LANDING PAGE =====
 function LandingPage({ onLogin }) {
-  const logoSrc = useMemo(
-    () => `${import.meta.env.BASE_URL}logo.png`,
-    []
-  );
-
   function scrollToId(id) {
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -220,7 +234,7 @@ function LandingPage({ onLogin }) {
   return (
     <div className="page">
       <main className="main">
-        {/* ===== HERO + CALCULADORA ===== */}
+        {/* HERO + CALCULADORA */}
         <section className="calculator" id="top">
           <div className="hero">
             <div className="hero-left">
@@ -289,7 +303,7 @@ function LandingPage({ onLogin }) {
           </div>
         </section>
 
-        {/* ===== PLANES ===== */}
+        {/* PLANES */}
         <section id="plans" className="section plans">
           <h2 className="section-title">
             <span className="shine-platinum">Planes</span>
@@ -303,11 +317,8 @@ function LandingPage({ onLogin }) {
             {PLANS.map((p) => (
               <article
                 key={p.id}
-                className={`plan-card ${
-                  p.id === "premium" ? "plan-card--premium" : ""
-                }`}
+                className={`plan-card ${p.id === "premium" ? "plan-card--premium" : ""}`}
               >
-                {/* Header */}
                 <header className="plan-head">
                   {p.badge && <div className="plan-badge">{p.badge}</div>}
                   <h3 className="plan-name">{p.name}</h3>
@@ -319,14 +330,12 @@ function LandingPage({ onLogin }) {
                   <p className="plan-desc">{p.desc}</p>
                 </header>
 
-                {/* Features */}
                 <ul className="plan-features">
                   {p.features.map((f) => (
                     <li key={f}>{f}</li>
                   ))}
                 </ul>
 
-                {/* Footer (button + footnote) */}
                 <div className="plan-footer">
                   <button
                     className={p.buttonClass}
@@ -340,10 +349,9 @@ function LandingPage({ onLogin }) {
               </article>
             ))}
           </div>
-
         </section>
 
-        {/* ===== DESARROLLADORES ===== */}
+        {/* DESARROLLADORES */}
         <section id="devs" className="section devs">
           <h2 className="section-title">
             <span className="shine-platinum">Desarrolladores</span>
@@ -355,7 +363,7 @@ function LandingPage({ onLogin }) {
           <div className="devs-grid">
             {DEVELOPERS.map((d) => (
               <article key={d.name} className="dev-card">
-                <div className="dev-avatar" aria-label={`Foto de ${d.name}`}>
+                <div className="dev-avatar">
                   <img src={d.image} alt={`Avatar de ${d.name}`} />
                 </div>
 
@@ -370,27 +378,15 @@ function LandingPage({ onLogin }) {
                         {d.email}
                       </a>
                     </li>
-
                     <li>
                       <span className="dev-label">GitHub:</span>{" "}
-                      <a
-                        className="dev-link"
-                        href={d.githubUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
+                      <a className="dev-link" href={d.githubUrl} target="_blank" rel="noreferrer">
                         {d.githubLabel}
                       </a>
                     </li>
-
                     <li>
                       <span className="dev-label">LinkedIn:</span>{" "}
-                      <a
-                        className="dev-link"
-                        href={d.linkedinUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
+                      <a className="dev-link" href={d.linkedinUrl} target="_blank" rel="noreferrer">
                         {d.linkedinLabel}
                       </a>
                     </li>
@@ -402,15 +398,27 @@ function LandingPage({ onLogin }) {
         </section>
       </main>
 
+      {/* FOOTER con links legales */}
       <footer className="footer">
-        <p className="footer-title">MathAPS</p>
-        <p className="footer-text">Proyecto desarrollado por estudiantes — 2026.</p>
+        <div className="footer-content">
+          <div>
+            <p className="footer-title">MathAPS</p>
+            <p className="footer-text">Proyecto desarrollado por estudiantes — 2026</p>
+          </div>
+          <div className="footer-links">
+            <a href="/terms" className="footer-link">Términos del Servicio</a>
+            <span className="footer-divider"></span>
+            <a href="/privacy" className="footer-link">Política de Privacidad</a>
+            <span className="footer-divider"></span>
+            <a href="mailto:support@mathaps.com" className="footer-link">Contacto</a>
+          </div>
+        </div>
       </footer>
     </div>
   );
 }
 
-// ===== CALCULATOR DEMO (funciona sin login) =====
+// ===== CALCULATOR DEMO =====
 function CalculatorDemo() {
   const [problemText, setProblemText] = useState("");
   const [imageFile, setImageFile] = useState(null);
@@ -493,11 +501,7 @@ function CalculatorDemo() {
       />
 
       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center" }}>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isLoading}
-        >
+        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
           📎 Adjuntar
         </button>
         <button onClick={handleSolve} disabled={isLoading || !problemText.trim()}>
@@ -506,9 +510,7 @@ function CalculatorDemo() {
         {imageFile && (
           <span style={{ fontSize: "0.85rem", opacity: 0.85, display: "flex", gap: 8, alignItems: "center" }}>
             Imagen adjunta
-            <button type="button" onClick={() => setImageFile(null)}>
-              ✕
-            </button>
+            <button type="button" onClick={() => setImageFile(null)}>✕</button>
           </span>
         )}
       </div>
@@ -534,12 +536,7 @@ function CalculatorDemo() {
       )}
       
       {answerText && (
-        <p style={{ 
-          marginTop: "1rem", 
-          fontSize: "13px", 
-          color: "rgba(255,255,255,0.65)",
-          textAlign: "center"
-        }}>
+        <p style={{ marginTop: "1rem", fontSize: "13px", color: "rgba(255,255,255,0.65)", textAlign: "center" }}>
           💡 <strong>Iniciá sesión</strong> para guardar tu historial y usar funciones avanzadas
         </p>
       )}

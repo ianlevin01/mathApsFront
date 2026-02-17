@@ -7,6 +7,7 @@ import rehypeKatex from "rehype-katex";
 import { getToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
+import "../styles/flashcards.css"; // ✅ NUEVO
 
 const API_URL = "https://mathapsapi.duckdns.org/math/";
 const API_BASE = "https://mathapsapi.duckdns.org";
@@ -25,7 +26,6 @@ export default function FolderChatView() {
   const [errorMsg, setErrorMsg] = useState("");
   const fileInputRef = useRef(null);
 
-  // Cargar chats de la carpeta al montar
   useEffect(() => {
     if (folderId) {
       loadFolderChats();
@@ -42,7 +42,6 @@ export default function FolderChatView() {
       if (!res.ok) throw new Error("Error al cargar carpetas");
       const data = await res.json();
       
-      // Buscar la carpeta actual
       const folder = Array.isArray(data) 
         ? data.find(f => (f.folderId || f.id) === folderId)
         : null;
@@ -64,12 +63,11 @@ export default function FolderChatView() {
       if (!res.ok) throw new Error("Error al cargar chats de carpeta");
       const data = await res.json();
       
-      // Ordenar chats por fecha descendente (más reciente primero)
       const sortedChats = Array.isArray(data) 
         ? data.sort((a, b) => {
             const dateA = new Date(a.createdAt || a.chatId);
             const dateB = new Date(b.createdAt || b.chatId);
-            return dateB - dateA; // Descendente
+            return dateB - dateA;
           })
         : [];
       
@@ -90,7 +88,6 @@ export default function FolderChatView() {
       const data = await res.json();
       setCurrentChatId(chatId);
       
-      // Procesar mensajes para extraer plotSpec si está embebido
       const processedMessages = (data.messages || []).map(msg => {
         if (msg.role === "assistant" && typeof msg.content === "string") {
           const graphMatch = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
@@ -98,11 +95,7 @@ export default function FolderChatView() {
             try {
               const plotSpec = JSON.parse(graphMatch[1]);
               const cleanContent = msg.content.replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, '').trim();
-              return {
-                ...msg,
-                content: cleanContent,
-                plotSpec: plotSpec
-              };
+              return { ...msg, content: cleanContent, plotSpec };
             } catch (e) {
               console.error("Error parseando GRAPH_JSON:", e);
             }
@@ -144,15 +137,10 @@ export default function FolderChatView() {
 
     try {
       const token = getToken?.() || "";
-
       const formData = new FormData();
       formData.append("problem", problemText);
       if (imageFile) formData.append("image", imageFile);
-      
-      // ✅ IMPORTANTE: Si hay un chat activo, enviar el chatId
-      if (currentChatId) {
-        formData.append("chatId", currentChatId);
-      }
+      if (currentChatId) formData.append("chatId", currentChatId);
 
       const res = await fetch(API_URL, {
         method: "POST",
@@ -170,11 +158,8 @@ export default function FolderChatView() {
       };
       setMessages((prev) => [...prev, aiMsg]);
 
-      // Si es un chat nuevo, asignarlo automáticamente a esta carpeta
       if (data.chat?.chatId && !currentChatId) {
         setCurrentChatId(data.chat.chatId);
-        
-        // Asignar a carpeta automáticamente
         try {
           await fetch(`${API_BASE}/folder/${folderId}/chats/${data.chat.chatId}`, {
             method: "POST",
@@ -183,7 +168,6 @@ export default function FolderChatView() {
         } catch (err) {
           console.error("Error asignando chat a carpeta:", err);
         }
-        
         loadFolderChats();
       }
 
@@ -216,10 +200,7 @@ export default function FolderChatView() {
           >
             ←
           </button>
-          <button
-            className="btn-new-chat"
-            onClick={startNewChat}
-          >
+          <button className="btn-new-chat" onClick={startNewChat}>
             + Nuevo Chat
           </button>
         </div>
@@ -227,6 +208,14 @@ export default function FolderChatView() {
         <div className="folder-sidebar-title">
           📁 {folderName}
         </div>
+
+        {/* ✅ NUEVO: Botón de Flashcards */}
+        <button
+          className="folder-flashcards-btn"
+          onClick={() => navigate(`/folder/${folderId}/flashcards`)}
+        >
+          🧠 Flashcards
+        </button>
 
         <div className="chat-list">
           {chats.length === 0 && (

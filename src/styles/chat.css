@@ -677,3 +677,26 @@
     max-width: 95%;
   }
 }
+.folder-flashcards-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.20), rgba(124,92,255,0.10));
+  border: 1px solid rgba(124,92,255,0.35);
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.90);
+  cursor: pointer;
+  transition: all 180ms ease;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.folder-flashcards-btn:hover {
+  background: linear-gradient(135deg, rgba(124,92,255,0.30), rgba(124,92,255,0.18));
+  border-color: rgba(124,92,255,0.55);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(124,92,255,0.20);
+}
