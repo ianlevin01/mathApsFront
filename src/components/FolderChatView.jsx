@@ -9,8 +9,8 @@ import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
 import "../styles/flashcards.css"; // ✅ NUEVO
 
-const API_URL = "https://mathapsapi.duckdns.org/math/";
-const API_BASE = "https://mathapsapi.duckdns.org";
+const API_URL = "https://api.mathaps.online/math/";
+const API_BASE = "https://api.mathaps.online";
 
 export default function FolderChatView() {
   const navigate = useNavigate();

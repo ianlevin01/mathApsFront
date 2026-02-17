@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { setToken } from "./auth";
 
-const AUTH_BASE = "https://mathapsapi.duckdns.org";
+const AUTH_BASE = "https://api.mathaps.online";
 
 export default function Auth({ onSuccess }) {
   const [mode, setMode] = useState("login"); // "login" | "register"

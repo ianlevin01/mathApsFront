@@ -8,7 +8,7 @@ import { getToken, getEmailFromToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
 
-const API_URL = "https://mathapsapi.duckdns.org/math/";
+const API_URL = "https://api.mathaps.online/math/";
 
 export default function ChatView() {
   const navigate = useNavigate();
@@ -68,7 +68,7 @@ export default function ChatView() {
   async function loadFolders() {
     try {
       const token = getToken?.() || "";
-      const res = await fetch(`https://mathapsapi.duckdns.org/folder`, {
+      const res = await fetch(`https://api.mathaps.online/folder`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Error al cargar carpetas");
@@ -99,7 +99,7 @@ export default function ChatView() {
     
     try {
       const token = getToken?.() || "";
-      const res = await fetch(`https://mathapsapi.duckdns.org/folder/${folderId}/chats/${currentChatId}`, {
+      const res = await fetch(`https://api.mathaps.online/folder/${folderId}/chats/${currentChatId}`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
