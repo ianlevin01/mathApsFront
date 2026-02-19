@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { setToken } from "./auth";
+import { GoogleLogin } from "@react-oauth/google";
 
-const AUTH_BASE = "https://api.mathaps.online";
+const AUTH_BASE = "http://localhost:3000";
 
 export default function Auth({ onSuccess }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
@@ -11,6 +12,28 @@ export default function Auth({ onSuccess }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  async function handleGoogleSuccess(credentialResponse) {
+    setIsLoading(true);
+    setErrorMsg("");
+    try {
+      const res = await fetch(`${AUTH_BASE}/auth/google`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken: credentialResponse.credential }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
+
+      setToken(data.token);
+      onSuccess?.();
+    } catch (err) {
+      setErrorMsg(err?.message || "Error con Google");
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -36,15 +59,13 @@ export default function Auth({ onSuccess }) {
         throw new Error(data?.message || data?.error || `Error ${res.status}`);
       }
 
-      // ✅ CASO REGISTER: normalmente NO devuelve token 
       if (mode === "register") {
         setSuccessMsg("Cuenta creada ✅ Ahora iniciá sesión.");
         setMode("login");
-        setPassword(""); // opcional
+        setPassword("");
         return;
       }
 
-      // ✅ CASO LOGIN: acá sí esperamos token
       const token =
         data?.token ||
         data?.access_token ||
@@ -78,6 +99,21 @@ export default function Auth({ onSuccess }) {
               : "Entrá para seguir usando MathAI."}
           </p>
         </header>
+
+        {/* Botón de Google */}
+        <div className="auth-google-wrapper">
+          <GoogleLogin
+            onSuccess={handleGoogleSuccess}
+            onError={() => setErrorMsg("Error al iniciar sesión con Google")}
+            width="100%"
+            text="continue_with"
+            locale="es"
+          />
+        </div>
+
+        <div className="auth-divider">
+          <span>o</span>
+        </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label className="auth-label">
