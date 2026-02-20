@@ -921,20 +921,23 @@ section {
   margin: 0 auto;
   padding: 20px;
 }
-
 /* =========================================================
    RESPONSIVE
 ========================================================= */
 @media (min-width: 768px) {
   .plans-grid {
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
   }
 }
 
+/* 3 COLUMNAS EN DESKTOP */
 @media (min-width: 1024px) {
+  .plans-grid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
   .header {
-    height: 56px; /* Un poquito más alto en desktop */
+    height: 56px;
   }
 
   .header-inner {
@@ -977,6 +980,11 @@ section {
   .folder-chat-view {
     padding-top: 56px;
   }
+
+  .devs-grid { 
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -989,10 +997,10 @@ section {
     font-size: 12px;
   }
 }
-/* =========================================================
-   DESARROLLADORES - AGREGAR AL FINAL DE index.css
-========================================================= */
 
+/* =========================================================
+   DESARROLLADORES
+========================================================= */
 .devs {
   padding: 32px 16px;
 }
@@ -1122,16 +1130,10 @@ section {
   text-shadow: 0 0 18px rgba(124,92,255,0.25);
 }
 
-/* Responsive */
 @media (min-width: 768px) {
   .devs-grid { 
-    grid-template-columns: 1fr 1fr; 
+    grid-template-columns: 1fr 1fr;
     gap: 20px; 
-  }
-  
-  .plans-grid { 
-    grid-template-columns: 1fr 1fr; 
-    gap: 16px; 
   }
   
   .section-title { 
@@ -1139,16 +1141,9 @@ section {
   }
 }
 
-@media (min-width: 1024px) {
-  .devs-grid { 
-    grid-template-columns: 1fr 1fr 1fr; 
-    gap: 24px;
-  }
-}
 /* =========================================================
-   LEGAL PAGES - AGREGAR A index.css
+   LEGAL PAGES
 ========================================================= */
-
 .legal-page {
   min-height: 100vh;
   padding: 80px 20px 60px;
@@ -1188,11 +1183,7 @@ section {
   font-weight: 900;
   letter-spacing: -0.02em;
   margin: 0 0 12px 0;
-  background: linear-gradient(
-    135deg,
-    #ffffff 0%,
-    rgba(255, 255, 255, 0.85) 100%
-  );
+  background: linear-gradient(135deg, #ffffff 0%, rgba(255, 255, 255, 0.85) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -1280,17 +1271,6 @@ section {
   text-shadow: 0 0 12px rgba(124, 92, 255, 0.3);
 }
 
-/* Footer mejorado */
-.footer {
-  padding: 32px 20px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.65);
-  text-align: center;
-  font-size: 14px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
 .footer-content {
   display: flex;
   flex-direction: column;
@@ -1354,7 +1334,6 @@ section {
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* Responsive */
 @media (max-width: 640px) {
   .legal-content {
     padding: 24px;
@@ -1389,6 +1368,7 @@ section {
     justify-content: space-between;
   }
 }
+
 .auth-google-button {
   display: flex;
   align-items: center;
@@ -1405,9 +1385,11 @@ section {
   transition: background 0.2s;
   margin-bottom: 8px;
 }
+
 .auth-google-button:hover {
   background: rgba(255,255,255,0.08);
 }
+
 .auth-divider {
   display: flex;
   align-items: center;
@@ -1416,6 +1398,7 @@ section {
   color: rgba(255,255,255,0.4);
   font-size: 0.85rem;
 }
+
 .auth-divider::before,
 .auth-divider::after {
   content: "";

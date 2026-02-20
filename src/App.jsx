@@ -64,35 +64,55 @@ const PLANS = [
     name: "Free",
     price: "0",
     period: "/mes",
-    desc: "Para usarlo todos los días sin complicaciones.",
+    desc: "Para probar la plataforma y resolver problemas básicos.",
     features: [
-      "Graficador 2D (curvas) y puntos",
-      "Respuestas cortas + pasos básicos",
-      "Hasta 10 consultas por día",
-      "Export básico (captura / copiar resultado)",
+      "Hasta 150 mensajes con IA por mes",
+      "Graficos limitados",
+      "Hasta 3 carpetas",
+      "Flashcards básicas",
+      "Exportación simple",
     ],
     buttonText: "Empezar gratis",
     buttonClass: "plan-button plan-button--ghost",
     footnote: "Sin tarjeta • Acceso inmediato",
   },
   {
-    id: "premium",
+    id: "plus",
     badge: "Recomendado",
-    name: "Premium",
+    name: "Plus",
     price: "4.99",
     period: "/mes",
-    desc: "Ideal para parciales, finales y ejercicios pesados (multivariable, optimización, etc.).",
+    desc: "Una solución integral que combina resolución de ejercicios, organización académica y generación automática de métodos de estudio en una única plataforma.",
     features: [
-      "Graficador 2D + 3D (superficies/contornos)",
-      "Intersecciones y múltiples funciones en un mismo gráfico",
-      "Explicación paso a paso completa",
-      "Historial de problemas + favoritos",
-      "Export PDF / PNG (fácil para entregar)",
-      "Prioridad de respuesta",
+      "Carpetas ilimitadas para organizar materias y contenidos",
+      "Hasta 500 mensajes con IA por mes",
+      "Flashcards ilimitadas",
+      "Modelos matemáticos más avanzados",
+      "Seguimiento de progreso por materia",
+      "Exportación de exámenes en PDF",
     ],
-    buttonText: "Pasar a Premium",
+    buttonText: "Pasar a Plus",
     buttonClass: "plan-button plan-button--primary",
     footnote: "Cancelás cuando quieras • Soporte prioritario",
+  },
+  {
+    id: "pro",
+    badge: "Más completo",
+    name: "Pro",
+    price: "9.99",
+    period: "/mes",
+    desc: "Incluye capacidades extendidas, análisis avanzado y herramientas diseñadas para optimizar el estudio a un nivel superior.",
+    features: [
+      "Hasta 2000 mensajes con IA por mes",
+      "Prioridad de procesamiento",
+      "Acceso a los mejores modelos matemáticos",
+      "Generación automática de resúmenes por carpeta",
+      "Estadísticas avanzadas de progreso",
+      "Acceso anticipado a nuevas funcionalidades",
+    ],
+    buttonText: "Pasar a Pro",
+    buttonClass: "plan-button plan-button--primary",
+    footnote: "Cancelás cuando quieras • Soporte premium 24/7",
   },
 ];
 
@@ -317,7 +337,7 @@ function LandingPage({ onLogin }) {
             {PLANS.map((p) => (
               <article
                 key={p.id}
-                className={`plan-card ${p.id === "premium" ? "plan-card--premium" : ""}`}
+                className={`plan-card ${p.id === "plus" || p.id === "pro" ? "plan-card--premium" : ""}`}
               >
                 <header className="plan-head">
                   {p.badge && <div className="plan-badge">{p.badge}</div>}
