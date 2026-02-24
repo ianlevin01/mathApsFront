@@ -8,8 +8,79 @@ import { getToken, getEmailFromToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
 
-const API_URL = "https://api.mathaps.online/math/";
+const API_URL = "http://localhost:3000/math/";
+const API_BASE = "http://localhost:3000";
 
+// ── Smart Folder Nudge ──────────────────────────────────────────────────────
+function FolderNudge({ suggestion, folders, onAssignExisting, onCreateNew, onDismiss }) {
+  const [busy, setBusy] = useState(false);
+
+  // isExisting true → la IA dice que ya hay una carpeta que encaja
+  const matchedFolder = suggestion.isExisting
+    ? folders.find((f) => f.name === suggestion.folderName)
+    : null;
+
+  if (suggestion.isExisting && matchedFolder) {
+    return (
+      <div className="folder-nudge folder-nudge--assign">
+        <div className="folder-nudge__icon">📂</div>
+        <div className="folder-nudge__body">
+          <p className="folder-nudge__text">
+            ¿Guardamos esto en <strong>"{matchedFolder.name}"</strong>?
+          </p>
+          <p className="folder-nudge__sub">Parece que encaja con esa carpeta</p>
+          <div className="folder-nudge__actions">
+            <button
+              className="folder-nudge__btn folder-nudge__btn--primary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                await onAssignExisting(matchedFolder.id);
+                setBusy(false);
+              }}
+            >
+              {busy ? "Guardando…" : `Sí, guardar ahí`}
+            </button>
+            <button className="folder-nudge__btn folder-nudge__btn--ghost" onClick={onDismiss}>
+              No por ahora
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // No existe → sugerir crear
+  return (
+    <div className="folder-nudge folder-nudge--create">
+      <div className="folder-nudge__icon">📁</div>
+      <div className="folder-nudge__body">
+        <p className="folder-nudge__text">¿Guardamos esto en una carpeta?</p>
+        <p className="folder-nudge__sub">
+          Te sugerimos crear <strong>"{suggestion.folderName}"</strong>
+        </p>
+        <div className="folder-nudge__actions">
+          <button
+            className="folder-nudge__btn folder-nudge__btn--primary"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await onCreateNew(suggestion.folderName);
+              setBusy(false);
+            }}
+          >
+            {busy ? "Creando…" : `+ Crear "${suggestion.folderName}"`}
+          </button>
+          <button className="folder-nudge__btn folder-nudge__btn--ghost" onClick={onDismiss}>
+            Ahora no
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────
 export default function ChatView() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -23,7 +94,14 @@ export default function ChatView() {
   const [errorMsg, setErrorMsg] = useState("");
   const [showFolderPopup, setShowFolderPopup] = useState(false);
   const [folders, setFolders] = useState([]);
+
   const fileInputRef = useRef(null);
+
+  // Nudge state
+  const [nudgeSuggestion, setNudgeSuggestion] = useState(null); // { folderName, isExisting }
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const firstMessageRef = useRef(null); // guardamos el texto del primer mensaje
+  const isFirstMessage = useRef(true);
 
   useEffect(() => {
     loadChats();
@@ -31,9 +109,10 @@ export default function ChatView() {
   }, []);
 
   useEffect(() => {
-    const chatId = searchParams.get('id');
+    const chatId = searchParams.get("id");
     if (chatId) {
       loadChat(chatId);
+      isFirstMessage.current = false;
     }
   }, [searchParams]);
 
@@ -41,22 +120,15 @@ export default function ChatView() {
     try {
       const token = getToken?.() || "";
       const email = getEmailFromToken();
-
       const res = await fetch(`${API_URL}chats?email=${encodeURIComponent(email)}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Error al cargar chats");
       const data = await res.json();
-      
-      const sortedChats = Array.isArray(data) 
-        ? data.sort((a, b) => {
-            const dateA = new Date(a.createdAt || a.chatId);
-            const dateB = new Date(b.createdAt || b.chatId);
-            return dateB - dateA;
-          })
+      const sorted = Array.isArray(data)
+        ? data.sort((a, b) => new Date(b.createdAt || b.chatId) - new Date(a.createdAt || a.chatId))
         : [];
-      
-      setChats(sortedChats);
+      setChats(sorted);
     } catch (err) {
       console.error(err);
     }
@@ -65,48 +137,75 @@ export default function ChatView() {
   async function loadFolders() {
     try {
       const token = getToken?.() || "";
-      const res = await fetch(`https://api.mathaps.online/folder`, {
+      const res = await fetch(`${API_BASE}/folder`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) throw new Error("Error al cargar carpetas");
+      if (!res.ok) throw new Error();
       const data = await res.json();
-      
-      const processedFolders = Array.isArray(data) 
-        ? data.map(folder => {
-            const chatsArray = Object.values(folder).find(val => Array.isArray(val));
-            return {
-              id: folder.folderId || folder.id,
-              name: folder.name,
-              chatCount: chatsArray ? chatsArray.length : 0,
-              createdAt: folder.createdAt
-            };
+      const processed = Array.isArray(data)
+        ? data.map((f) => {
+            const chatsArr = Object.values(f).find((v) => Array.isArray(v));
+            return { id: f.folderId || f.id, name: f.name, chatCount: chatsArr ? chatsArr.length : 0 };
           })
         : [];
-      
-      setFolders(processedFolders);
-    } catch (err) {
-      console.error(err);
+      setFolders(processed);
+    } catch {
       setFolders([]);
     }
   }
 
   async function assignToFolder(folderId) {
     if (!currentChatId) return;
-    
-    try {
-      const token = getToken?.() || "";
-      const res = await fetch(`https://api.mathaps.online/folder/${folderId}/chats/${currentChatId}`, {
+    const token = getToken?.() || "";
+    await fetch(`${API_BASE}/folder/${folderId}/chats/${currentChatId}`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    setShowFolderPopup(false);
+    setNudgeSuggestion(null);
+    setNudgeDismissed(true);
+  }
+
+  async function createFolderAndAssign(name) {
+    const token = getToken?.() || "";
+    const res = await fetch(`${API_BASE}/folder`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) throw new Error("Error creando carpeta");
+    const folder = await res.json();
+    const folderId = folder.folderId || folder.id;
+    if (currentChatId && folderId) {
+      await fetch(`${API_BASE}/folder/${folderId}/chats/${currentChatId}`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      
-      if (!res.ok) throw new Error("Error al asignar chat");
-      
-      setShowFolderPopup(false);
-      alert("¡Chat agregado a la carpeta!");
-    } catch (err) {
-      console.error(err);
-      alert("Error al agregar el chat a la carpeta");
+    }
+    await loadFolders();
+    setNudgeSuggestion(null);
+    setNudgeDismissed(true);
+  }
+
+  async function fetchFolderSuggestion(firstMessage) {
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/suggest`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ firstMessage }),
+      });
+      if (!res.ok) return;
+      const suggestion = await res.json(); // { folderName, isExisting }
+      setNudgeSuggestion(suggestion);
+    } catch (e) {
+      console.error("Error obteniendo sugerencia de carpeta:", e);
     }
   }
 
@@ -116,31 +215,25 @@ export default function ChatView() {
       const res = await fetch(`${API_URL}chat/${chatId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!res.ok) throw new Error("Error al cargar chat");
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setCurrentChatId(chatId);
-      
-      const processedMessages = (data.messages || []).map(msg => {
+      const processed = (data.messages || []).map((msg) => {
         if (msg.role === "assistant" && typeof msg.content === "string") {
-          const graphMatch = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
-          if (graphMatch) {
+          const m = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
+          if (m) {
             try {
-              const plotSpec = JSON.parse(graphMatch[1]);
-              const cleanContent = msg.content.replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, '').trim();
               return {
                 ...msg,
-                content: cleanContent,
-                plotSpec: plotSpec
+                content: msg.content.replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, "").trim(),
+                plotSpec: JSON.parse(m[1]),
               };
-            } catch (e) {
-              console.error("Error parseando GRAPH_JSON:", e);
-            }
+            } catch {}
           }
         }
         return msg;
       });
-      
-      setMessages(processedMessages);
+      setMessages(processed);
     } catch (err) {
       console.error(err);
     }
@@ -149,30 +242,31 @@ export default function ChatView() {
   function handlePaste(e) {
     const items = e.clipboardData?.items;
     if (!items) return;
-    let imageFound = false;
+    let found = false;
     for (const item of items) {
       if (item.type.startsWith("image/")) {
         const file = item.getAsFile();
-        if (file) {
-          imageFound = true;
-          setImageFile(file);
-        }
+        if (file) { found = true; setImageFile(file); }
       }
     }
-    if (imageFound) e.preventDefault();
+    if (found) e.preventDefault();
   }
 
   async function handleSolve() {
     if (!problemText.trim()) return;
 
+    const isFirst = isFirstMessage.current;
+    if (isFirst) {
+      isFirstMessage.current = false;
+      firstMessageRef.current = problemText.trim();
+    }
+
     setIsLoading(false);
     setErrorMsg("");
 
-    const userMsg = { role: "user", content: problemText };
-
     setMessages((prev) => [
       ...prev,
-      userMsg,
+      { role: "user", content: problemText },
       { role: "assistant", content: "", plotSpec: null, streaming: true },
     ]);
 
@@ -183,7 +277,6 @@ export default function ChatView() {
 
     try {
       const token = getToken?.() || "";
-
       const formData = new FormData();
       formData.append("problem", currentProblem);
       if (currentImage) formData.append("image", currentImage);
@@ -205,7 +298,6 @@ export default function ChatView() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split("\n\n");
         buffer = parts.pop();
@@ -213,31 +305,20 @@ export default function ChatView() {
         for (const part of parts) {
           const line = part.replace(/^data: /, "").trim();
           if (!line) continue;
-
           let event;
-          try {
-            event = JSON.parse(line);
-          } catch {
-            continue;
-          }
+          try { event = JSON.parse(line); } catch { continue; }
 
           if (event.type === "delta") {
             accumulatedText += event.text;
             setMessages((prev) => {
               const updated = [...prev];
-              const lastIdx = updated.length - 1;
-              updated[lastIdx] = {
-                ...updated[lastIdx],
-                content: accumulatedText,
-                streaming: true,
-              };
+              updated[updated.length - 1] = { ...updated[updated.length - 1], content: accumulatedText, streaming: true };
               return updated;
             });
           } else if (event.type === "done") {
             setMessages((prev) => {
               const updated = [...prev];
-              const lastIdx = updated.length - 1;
-              updated[lastIdx] = {
+              updated[updated.length - 1] = {
                 role: "assistant",
                 content: accumulatedText,
                 plotSpec: event.plotSpec || null,
@@ -249,6 +330,13 @@ export default function ChatView() {
             if (event.chat?.chatId && !currentChatId) {
               setCurrentChatId(event.chat.chatId);
               loadChats();
+
+              // Pedir sugerencia de carpeta después de la primera respuesta
+              if (isFirst && !nudgeDismissed) {
+                setTimeout(() => {
+                  fetchFolderSuggestion(firstMessageRef.current);
+                }, 600);
+              }
             }
           } else if (event.type === "error") {
             throw new Error(event.message);
@@ -259,9 +347,7 @@ export default function ChatView() {
       setErrorMsg(err?.message || "Error desconocido");
       setMessages((prev) => {
         const updated = [...prev];
-        if (updated[updated.length - 1]?.streaming) {
-          updated.pop();
-        }
+        if (updated[updated.length - 1]?.streaming) updated.pop();
         return updated;
       });
     }
@@ -272,6 +358,10 @@ export default function ChatView() {
     setMessages([]);
     setProblemText("");
     setImageFile(null);
+    setNudgeSuggestion(null);
+    setNudgeDismissed(false);
+    firstMessageRef.current = null;
+    isFirstMessage.current = true;
   }
 
   return (
@@ -279,42 +369,26 @@ export default function ChatView() {
       {/* Sidebar */}
       <div className={`chat-sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="chat-sidebar-header">
-          <button
-            className="btn-icon btn-back"
-            onClick={() => navigate("/dashboard")}
-            title="Volver al Dashboard"
-          >
+          <button className="btn-icon btn-back" onClick={() => navigate("/dashboard")} title="Volver al Dashboard">
             ←
           </button>
-          <button
-            className="btn-new-chat"
-            onClick={startNewChat}
-          >
-            + Nuevo Chat
-          </button>
+          <button className="btn-new-chat" onClick={startNewChat}>+ Nuevo Chat</button>
         </div>
 
         <div className="chat-list">
-          {chats.length === 0 && (
-            <p className="chat-list-empty">No hay chats aún</p>
-          )}
+          {chats.length === 0 && <p className="chat-list-empty">No hay chats aún</p>}
           {chats.map((chat) => (
             <div
               key={chat.chatId}
-              className={`chat-item ${
-                currentChatId === chat.chatId ? "active" : ""
-              }`}
+              className={`chat-item ${currentChatId === chat.chatId ? "active" : ""}`}
               onClick={() => loadChat(chat.chatId)}
             >
-              <div className="chat-item-title">{chat.title}</div>
-              <div className="chat-item-date">
-                {new Date(chat.createdAt).toLocaleDateString()}
-              </div>
+              <div className="chat-item-title">{chat.title || "Sin título"}</div>
+              <div className="chat-item-date">{new Date(chat.createdAt).toLocaleDateString()}</div>
             </div>
           ))}
         </div>
 
-        {/* Upgrade widget en el sidebar */}
         <div className="sidebar-upgrade" onClick={() => navigate("/plans")}>
           <div className="sidebar-upgrade-glow" />
           <div className="sidebar-upgrade-icon">⚡</div>
@@ -325,15 +399,12 @@ export default function ChatView() {
           <span className="sidebar-upgrade-arrow">→</span>
         </div>
 
-        <button
-          className="sidebar-toggle"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-        >
+        <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
           {sidebarOpen ? "◀" : "▶"}
         </button>
       </div>
 
-      {/* Main chat area */}
+      {/* Main */}
       <div className="chat-main">
         <div className="chat-messages">
           {messages.length === 0 && (
@@ -344,34 +415,26 @@ export default function ChatView() {
           )}
 
           {messages.map((msg, idx) => {
-            if (!msg || typeof msg !== 'object') return null;
-            
-            const content = typeof msg.content === 'string' 
-              ? msg.content 
-              : typeof msg.content === 'object'
-                ? JSON.stringify(msg.content)
-                : String(msg.content || '');
+            if (!msg || typeof msg !== "object") return null;
+            const content =
+              typeof msg.content === "string" ? msg.content
+              : typeof msg.content === "object" ? JSON.stringify(msg.content)
+              : String(msg.content || "");
 
             return (
-              <div key={idx} className={`chat-message chat-message--${msg.role || 'user'}`}>
+              <div key={idx} className={`chat-message chat-message--${msg.role || "user"}`}>
                 <div className="chat-message-content">
                   {msg.role === "user" ? (
                     <p>{content}</p>
                   ) : (
                     <div className="assistant-message-body">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkMath]}
-                        rehypePlugins={[rehypeKatex]}
-                      >
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                         {normalizeMath(content)}
                       </ReactMarkdown>
                     </div>
                   )}
                 </div>
-                {/* Plot va FUERA del bubble, debajo del mensaje */}
-                {msg.role === "assistant" && msg.plotSpec && (
-                  <MessagePlot plotSpec={msg.plotSpec} />
-                )}
+                {msg.role === "assistant" && msg.plotSpec && <MessagePlot plotSpec={msg.plotSpec} />}
               </div>
             );
           })}
@@ -379,48 +442,40 @@ export default function ChatView() {
           {isLoading && (
             <div className="chat-message chat-message--assistant">
               <div className="chat-message-content">
-                <div className="typing-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
+                <div className="typing-indicator"><span /><span /><span /></div>
               </div>
             </div>
           )}
+
+          {/* ── Smart Folder Nudge ── */}
+          {nudgeSuggestion && currentChatId && !nudgeDismissed && (
+            <FolderNudge
+              suggestion={nudgeSuggestion}
+              folders={folders}
+              onAssignExisting={assignToFolder}
+              onCreateNew={createFolderAndAssign}
+              onDismiss={() => { setNudgeSuggestion(null); setNudgeDismissed(true); }}
+            />
+          )}
         </div>
 
-        {/* Mini popup para agregar a carpeta */}
+        {/* Folder popup manual */}
         {currentChatId && messages.length > 0 && (
-          <div className={`folder-popup ${showFolderPopup ? 'open' : ''}`}>
+          <div className={`folder-popup ${showFolderPopup ? "open" : ""}`}>
             {!showFolderPopup ? (
-              <button 
-                className="folder-popup-trigger"
-                onClick={() => setShowFolderPopup(true)}
-                title="Agregar a carpeta"
-              >
+              <button className="folder-popup-trigger" onClick={() => setShowFolderPopup(true)} title="Agregar a carpeta">
                 📁+
               </button>
             ) : (
               <div className="folder-popup-content">
                 <div className="folder-popup-header">
                   <span>Agregar a carpeta</span>
-                  <button 
-                    className="folder-popup-close"
-                    onClick={() => setShowFolderPopup(false)}
-                  >
-                    ✕
-                  </button>
+                  <button className="folder-popup-close" onClick={() => setShowFolderPopup(false)}>✕</button>
                 </div>
                 <div className="folder-popup-list">
-                  {folders.length === 0 && (
-                    <p className="folder-popup-empty">No hay carpetas. Creá una desde Estudios.</p>
-                  )}
-                  {folders.map(folder => (
-                    <div
-                      key={folder.id}
-                      className="folder-popup-item"
-                      onClick={() => assignToFolder(folder.id)}
-                    >
+                  {folders.length === 0 && <p className="folder-popup-empty">No hay carpetas aún.</p>}
+                  {folders.map((folder) => (
+                    <div key={folder.id} className="folder-popup-item" onClick={() => assignToFolder(folder.id)}>
                       <span className="folder-popup-icon">📁</span>
                       <span className="folder-popup-name">{folder.name}</span>
                       <span className="folder-popup-count">{folder.chatCount}</span>
@@ -432,26 +487,19 @@ export default function ChatView() {
           </div>
         )}
 
-        {/* Input area */}
+        {/* Input */}
         <div className="chat-input-area">
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
-          
           <div className="chat-input-wrap">
             <textarea
               value={problemText}
               onChange={(e) => setProblemText(e.target.value)}
               onPaste={handlePaste}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSolve();
-                }
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSolve(); } }}
               rows={3}
               placeholder="Escribí tu problema matemático... (Enter para enviar)"
               disabled={isLoading}
             />
-
             <input
               ref={fileInputRef}
               type="file"
@@ -459,35 +507,17 @@ export default function ChatView() {
               style={{ display: "none" }}
               onChange={(e) => setImageFile(e.target.files?.[0] || null)}
             />
-
             <div className="chat-input-actions">
-              <button
-                type="button"
-                className="btn-attach"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
-              >
+              <button type="button" className="btn-attach" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
                 📎
               </button>
-
               {imageFile && (
                 <span className="file-badge">
                   Imagen adjunta
-                  <button
-                    type="button"
-                    onClick={() => setImageFile(null)}
-                    className="file-badge-remove"
-                  >
-                    ✕
-                  </button>
+                  <button type="button" onClick={() => setImageFile(null)} className="file-badge-remove">✕</button>
                 </span>
               )}
-
-              <button
-                onClick={handleSolve}
-                disabled={isLoading || !problemText.trim()}
-                className="btn-send"
-              >
+              <button onClick={handleSolve} disabled={isLoading || !problemText.trim()} className="btn-send">
                 {isLoading ? "..." : "Enviar"}
               </button>
             </div>
@@ -501,22 +531,14 @@ export default function ChatView() {
 function MessagePlot({ plotSpec }) {
   const [minimized, setMinimized] = useState(false);
   const plotResult = interpretPlot(plotSpec);
-
-  if (plotResult.error) {
-    return <p className="plot-error">{plotResult.error}</p>;
-  }
-
+  if (plotResult.error) return <p className="plot-error">{plotResult.error}</p>;
   if (!plotResult.model) return null;
 
   return (
     <div className={`message-plot-wrapper ${minimized ? "minimized" : "expanded"}`}>
       <div className="message-plot-header">
         <span className="message-plot-title">📊 Gráfico</span>
-        <button
-          className="message-plot-toggle"
-          onClick={() => setMinimized((v) => !v)}
-          title={minimized ? "Expandir gráfico" : "Minimizar gráfico"}
-        >
+        <button className="message-plot-toggle" onClick={() => setMinimized((v) => !v)}>
           {minimized ? "⤢ Expandir" : "⤡ Minimizar"}
         </button>
       </div>

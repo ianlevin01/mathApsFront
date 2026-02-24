@@ -3,7 +3,7 @@ import { getToken } from "../auth";
 import { useParams, useNavigate } from "react-router-dom";
 import "../styles/flashcards.css";
 
-const API_BASE = "https://api.mathaps.online";
+const API_BASE = "http://localhost:3000";
 
 export default function Flashcards() {
   const { folderId } = useParams();

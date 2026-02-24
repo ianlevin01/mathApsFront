@@ -7,10 +7,9 @@ import rehypeKatex from "rehype-katex";
 import { getToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
-import "../styles/flashcards.css"; // ✅ NUEVO
 
-const API_URL = "https://api.mathaps.online/math/";
-const API_BASE = "https://api.mathaps.online";
+const API_URL = "http://localhost:3000/math/";
+const API_BASE = "http://localhost:3000";
 
 export default function FolderChatView() {
   const navigate = useNavigate();
@@ -41,14 +40,10 @@ export default function FolderChatView() {
       });
       if (!res.ok) throw new Error("Error al cargar carpetas");
       const data = await res.json();
-      
-      const folder = Array.isArray(data) 
-        ? data.find(f => (f.folderId || f.id) === folderId)
+      const folder = Array.isArray(data)
+        ? data.find((f) => (f.folderId || f.id) === folderId)
         : null;
-      
-      if (folder) {
-        setFolderName(folder.name || "Carpeta");
-      }
+      if (folder) setFolderName(folder.name || "Carpeta");
     } catch (err) {
       console.error(err);
     }
@@ -62,15 +57,13 @@ export default function FolderChatView() {
       });
       if (!res.ok) throw new Error("Error al cargar chats de carpeta");
       const data = await res.json();
-      
-      const sortedChats = Array.isArray(data) 
-        ? data.sort((a, b) => {
-            const dateA = new Date(a.createdAt || a.chatId);
-            const dateB = new Date(b.createdAt || b.chatId);
-            return dateB - dateA;
-          })
+      const sortedChats = Array.isArray(data)
+        ? data.sort(
+            (a, b) =>
+              new Date(b.createdAt || b.chatId) -
+              new Date(a.createdAt || a.chatId)
+          )
         : [];
-      
       setChats(sortedChats);
     } catch (err) {
       console.error(err);
@@ -87,14 +80,17 @@ export default function FolderChatView() {
       if (!res.ok) throw new Error("Error al cargar chat");
       const data = await res.json();
       setCurrentChatId(chatId);
-      
-      const processedMessages = (data.messages || []).map(msg => {
+      const processedMessages = (data.messages || []).map((msg) => {
         if (msg.role === "assistant" && typeof msg.content === "string") {
-          const graphMatch = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
+          const graphMatch = msg.content.match(
+            /<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/
+          );
           if (graphMatch) {
             try {
               const plotSpec = JSON.parse(graphMatch[1]);
-              const cleanContent = msg.content.replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, '').trim();
+              const cleanContent = msg.content
+                .replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, "")
+                .trim();
               return { ...msg, content: cleanContent, plotSpec };
             } catch (e) {
               console.error("Error parseando GRAPH_JSON:", e);
@@ -103,7 +99,6 @@ export default function FolderChatView() {
         }
         return msg;
       });
-      
       setMessages(processedMessages);
     } catch (err) {
       console.error(err);
@@ -128,56 +123,119 @@ export default function FolderChatView() {
 
   async function handleSolve() {
     if (!problemText.trim()) return;
-    
-    setIsLoading(true);
+
+    setIsLoading(false);
     setErrorMsg("");
 
     const userMsg = { role: "user", content: problemText };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      { role: "assistant", content: "", plotSpec: null, streaming: true },
+    ]);
+
+    const currentProblem = problemText;
+    const currentImage = imageFile;
+    setProblemText("");
+    setImageFile(null);
 
     try {
       const token = getToken?.() || "";
       const formData = new FormData();
-      formData.append("problem", problemText);
-      if (imageFile) formData.append("image", imageFile);
+      formData.append("problem", currentProblem);
+      if (currentImage) formData.append("image", currentImage);
       if (currentChatId) formData.append("chatId", currentChatId);
 
-      const res = await fetch(API_URL, {
+      const response = await fetch(API_URL, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
 
-      if (!res.ok) throw new Error(`Error ${res.status}`);
-      const data = await res.json();
+      if (!response.ok) throw new Error(`Error ${response.status}`);
 
-      const aiMsg = {
-        role: "assistant",
-        content: data.answerText || "",
-        plotSpec: data.plotSpec || null,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulatedText = "";
 
-      if (data.chat?.chatId && !currentChatId) {
-        setCurrentChatId(data.chat.chatId);
-        try {
-          await fetch(`${API_BASE}/folder/${folderId}/chats/${data.chat.chatId}`, {
-            method: "POST",
-            headers: token ? { Authorization: `Bearer ${token}` } : {},
-          });
-        } catch (err) {
-          console.error("Error asignando chat a carpeta:", err);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop();
+
+        for (const part of parts) {
+          const line = part.replace(/^data: /, "").trim();
+          if (!line) continue;
+
+          let event;
+          try {
+            event = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (event.type === "delta") {
+            accumulatedText += event.text;
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              updated[lastIdx] = {
+                ...updated[lastIdx],
+                content: accumulatedText,
+                streaming: true,
+              };
+              return updated;
+            });
+          } else if (event.type === "done") {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              updated[lastIdx] = {
+                role: "assistant",
+                content: accumulatedText,
+                plotSpec: event.plotSpec || null,
+                streaming: false,
+              };
+              return updated;
+            });
+
+            if (event.chat?.chatId && !currentChatId) {
+              const newChatId = event.chat.chatId;
+              setCurrentChatId(newChatId);
+
+              // Auto-assign to current folder
+              try {
+                await fetch(
+                  `${API_BASE}/folder/${folderId}/chats/${newChatId}`,
+                  {
+                    method: "POST",
+                    headers: token
+                      ? { Authorization: `Bearer ${token}` }
+                      : {},
+                  }
+                );
+              } catch (err) {
+                console.error("Error asignando chat a carpeta:", err);
+              }
+
+              loadFolderChats();
+            }
+          } else if (event.type === "error") {
+            throw new Error(event.message);
+          }
         }
-        loadFolderChats();
       }
-
-      setProblemText("");
-      setImageFile(null);
     } catch (err) {
       setErrorMsg(err?.message || "Error desconocido");
-      setMessages((prev) => prev.slice(0, -1));
-    } finally {
-      setIsLoading(false);
+      setMessages((prev) => {
+        const updated = [...prev];
+        if (updated[updated.length - 1]?.streaming) updated.pop();
+        return updated;
+      });
     }
   }
 
@@ -205,11 +263,8 @@ export default function FolderChatView() {
           </button>
         </div>
 
-        <div className="folder-sidebar-title">
-          📁 {folderName}
-        </div>
+        <div className="folder-sidebar-title">📁 {folderName}</div>
 
-        {/* Botón de Flashcards */}
         <button
           className="folder-flashcards-btn"
           onClick={() => navigate(`/folder/${folderId}/flashcards`)}
@@ -231,19 +286,22 @@ export default function FolderChatView() {
             >
               <div className="chat-item-title">{chat.title || "Sin título"}</div>
               <div className="chat-item-date">
-                {chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ""}
+                {chat.createdAt
+                  ? new Date(chat.createdAt).toLocaleDateString()
+                  : ""}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Upgrade widget */}
         <div className="sidebar-upgrade" onClick={() => navigate("/plans")}>
           <div className="sidebar-upgrade-glow" />
           <div className="sidebar-upgrade-icon">⚡</div>
           <div className="sidebar-upgrade-content">
             <span className="sidebar-upgrade-title">Subí tu plan</span>
-            <span className="sidebar-upgrade-desc">Más mensajes y funciones avanzadas</span>
+            <span className="sidebar-upgrade-desc">
+              Más mensajes y funciones avanzadas
+            </span>
           </div>
           <span className="sidebar-upgrade-arrow">→</span>
         </div>
@@ -261,39 +319,45 @@ export default function FolderChatView() {
         <div className="chat-messages">
           {messages.length === 0 && (
             <div className="chat-empty">
-              <h2>¡Empezá una conversación en esta carpeta!</h2>
-              <p>Los chats que crees acá se guardarán automáticamente en "{folderName}"</p>
+              <h2>¡Empezá una conversación!</h2>
+              <p>
+                Los chats que crees acá se guardan automáticamente en "
+                {folderName}"
+              </p>
             </div>
           )}
 
           {messages.map((msg, idx) => {
-            if (!msg || typeof msg !== 'object') return null;
-            
-            const content = typeof msg.content === 'string' 
-              ? msg.content 
-              : typeof msg.content === 'object'
+            if (!msg || typeof msg !== "object") return null;
+            const content =
+              typeof msg.content === "string"
+                ? msg.content
+                : typeof msg.content === "object"
                 ? JSON.stringify(msg.content)
-                : String(msg.content || '');
+                : String(msg.content || "");
 
             return (
-              <div key={idx} className={`chat-message chat-message--${msg.role || 'user'}`}>
+              <div
+                key={idx}
+                className={`chat-message chat-message--${msg.role || "user"}`}
+              >
                 <div className="chat-message-content">
                   {msg.role === "user" ? (
                     <p>{content}</p>
                   ) : (
-                    <>
+                    <div className="assistant-message-body">
                       <ReactMarkdown
                         remarkPlugins={[remarkMath]}
                         rehypePlugins={[rehypeKatex]}
                       >
                         {normalizeMath(content)}
                       </ReactMarkdown>
-                      {msg.plotSpec && (
-                        <MessagePlot plotSpec={msg.plotSpec} />
-                      )}
-                    </>
+                    </div>
                   )}
                 </div>
+                {msg.role === "assistant" && msg.plotSpec && (
+                  <MessagePlot plotSpec={msg.plotSpec} />
+                )}
               </div>
             );
           })}
@@ -314,7 +378,7 @@ export default function FolderChatView() {
         {/* Input area */}
         <div className="chat-input-area">
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
-          
+
           <div className="chat-input-wrap">
             <textarea
               value={problemText}
@@ -378,22 +442,42 @@ export default function FolderChatView() {
 }
 
 function MessagePlot({ plotSpec }) {
+  const [minimized, setMinimized] = useState(false);
   const plotResult = interpretPlot(plotSpec);
-  
-  if (plotResult.error) {
-    return <p className="plot-error">{plotResult.error}</p>;
-  }
 
+  if (plotResult.error) return <p className="plot-error">{plotResult.error}</p>;
   if (!plotResult.model) return null;
 
   return (
-    <div className="message-plot">
-      <Plot
-        data={plotResult.model.data}
-        layout={plotResult.model.layout}
-        useResizeHandler
-        style={{ width: "100%" }}
-      />
+    <div
+      className={`message-plot-wrapper ${minimized ? "minimized" : "expanded"}`}
+    >
+      <div className="message-plot-header">
+        <span className="message-plot-title">📊 Gráfico</span>
+        <button
+          className="message-plot-toggle"
+          onClick={() => setMinimized((v) => !v)}
+        >
+          {minimized ? "⤢ Expandir" : "⤡ Minimizar"}
+        </button>
+      </div>
+      {!minimized && (
+        <div className="message-plot-body">
+          <Plot
+            data={plotResult.model.data}
+            layout={{
+              ...plotResult.model.layout,
+              autosize: true,
+              paper_bgcolor: "rgba(0,0,0,0)",
+              plot_bgcolor: "rgba(18,18,26,0.6)",
+              font: { color: "#e0e0e0" },
+            }}
+            useResizeHandler
+            style={{ width: "100%", height: "420px" }}
+            config={{ responsive: true, displayModeBar: true }}
+          />
+        </div>
+      )}
     </div>
   );
 }

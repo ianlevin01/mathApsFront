@@ -24,6 +24,7 @@ import "./styles/dashboard.css";
 import "./styles/chat.css";
 import "./styles/study.css";
 import "./styles/plans.css";
+import "./styles/chat_additions.css";
 import "katex/dist/katex.min.css";
 
 const DEVELOPERS = [
@@ -490,7 +491,7 @@ function CalculatorDemo() {
       formData.append("problem", problemText);
       if (imageFile) formData.append("image", imageFile);
       
-      const res = await fetch("https://api.mathaps.online/math/guest", {
+      const res = await fetch("http://localhost:3000/math/guest", {
         method: "POST",
         body: formData,
       });
