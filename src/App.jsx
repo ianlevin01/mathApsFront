@@ -491,7 +491,7 @@ function CalculatorDemo() {
       formData.append("problem", problemText);
       if (imageFile) formData.append("image", imageFile);
       
-      const res = await fetch("http://localhost:3000/math/guest", {
+      const res = await fetch("https://api.mathaps.online/math/guest", {
         method: "POST",
         body: formData,
       });
