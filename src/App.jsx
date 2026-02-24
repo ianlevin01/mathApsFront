@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Plot from "react-plotly.js";
 import ReactMarkdown from "react-markdown";
@@ -12,7 +12,8 @@ import StudyHub from "./components/StudyHub";
 import FolderChatView from "./components/FolderChatView";
 import TermsOfService from "./components/TermsOfService";
 import PrivacyPolicy from "./components/PrivacyPolicy";
-import Flashcards from "./components/Flashcards"; // ✅ NUEVO
+import Flashcards from "./components/Flashcards";
+import PlansPage from "./components/PlansPage";
 import { getToken, removeToken } from "./auth.js";
 import { normalizeMath } from "./utils/mathUtils";
 import { interpretPlot } from "./utils/plotInterpreter";
@@ -22,6 +23,7 @@ import "./index.css";
 import "./styles/dashboard.css";
 import "./styles/chat.css";
 import "./styles/study.css";
+import "./styles/plans.css";
 import "katex/dist/katex.min.css";
 
 const DEVELOPERS = [
@@ -224,12 +226,23 @@ export default function App() {
             }
           />
 
-          {/* ✅ NUEVA RUTA: Flashcards */}
           <Route
             path="/folder/:folderId/flashcards"
             element={
               isAuthenticated ? (
                 <Flashcards />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+
+          {/* ✅ NUEVA RUTA: Planes (autenticado) */}
+          <Route
+            path="/plans"
+            element={
+              isAuthenticated ? (
+                <PlansPage />
               ) : (
                 <Navigate to="/" replace />
               )

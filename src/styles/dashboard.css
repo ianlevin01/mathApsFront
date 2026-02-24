@@ -137,6 +137,7 @@
   background: rgba(255,255,255,0.02);
   border: 1px solid var(--border-soft);
   border-radius: 16px;
+  margin-bottom: 24px;
 }
 
 .stat-item {
@@ -158,7 +159,115 @@
   color: var(--text-muted);
 }
 
-/* Responsive */
+/* ===== UPGRADE BANNER ===== */
+.dashboard-upgrade-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.14), rgba(90,62,224,0.08));
+  border: 1px solid rgba(124,92,255,0.3);
+  border-radius: 16px;
+  padding: 18px 24px;
+  cursor: pointer;
+  transition: all 200ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-upgrade-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(124,92,255,0.08), transparent);
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+}
+
+.dashboard-upgrade-banner:hover {
+  border-color: rgba(124,92,255,0.55);
+  box-shadow: 0 8px 32px rgba(124,92,255,0.2);
+  transform: translateY(-2px);
+}
+
+.dashboard-upgrade-banner:hover::before {
+  opacity: 1;
+}
+
+.upgrade-banner-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.upgrade-banner-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(124,92,255,0.6));
+  animation: iconPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+
+.upgrade-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.upgrade-banner-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.upgrade-banner-desc {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
+}
+
+.upgrade-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.upgrade-banner-price {
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+  white-space: nowrap;
+}
+
+.upgrade-banner-price strong {
+  color: #fff;
+}
+
+.upgrade-banner-btn {
+  background: linear-gradient(135deg, var(--violet-500), var(--violet-700));
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 160ms ease;
+  box-shadow: 0 4px 14px rgba(124,92,255,0.35);
+}
+
+.upgrade-banner-btn:hover {
+  filter: brightness(1.12);
+  box-shadow: 0 6px 18px rgba(124,92,255,0.45);
+  transform: translateY(-1px);
+}
+
+/* Mobile: stack upgrade banner */
 @media (max-width: 640px) {
   .dashboard-card {
     padding: 24px;
@@ -174,5 +283,16 @@
   
   .dashboard-stats {
     padding: 16px;
+  }
+
+  .dashboard-upgrade-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .upgrade-banner-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }

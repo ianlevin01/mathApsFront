@@ -25,13 +25,11 @@ export default function ChatView() {
   const [folders, setFolders] = useState([]);
   const fileInputRef = useRef(null);
 
-  // Cargar lista de chats al montar
   useEffect(() => {
     loadChats();
     loadFolders();
   }, []);
 
-  // Cargar chat específico si viene en URL (?id=...)
   useEffect(() => {
     const chatId = searchParams.get('id');
     if (chatId) {
@@ -50,12 +48,11 @@ export default function ChatView() {
       if (!res.ok) throw new Error("Error al cargar chats");
       const data = await res.json();
       
-      // Ordenar chats por fecha descendente (más reciente primero)
       const sortedChats = Array.isArray(data) 
         ? data.sort((a, b) => {
             const dateA = new Date(a.createdAt || a.chatId);
             const dateB = new Date(b.createdAt || b.chatId);
-            return dateB - dateA; // Descendente
+            return dateB - dateA;
           })
         : [];
       
@@ -74,7 +71,6 @@ export default function ChatView() {
       if (!res.ok) throw new Error("Error al cargar carpetas");
       const data = await res.json();
       
-      // Procesar carpetas igual que en StudyHub
       const processedFolders = Array.isArray(data) 
         ? data.map(folder => {
             const chatsArray = Object.values(folder).find(val => Array.isArray(val));
@@ -106,7 +102,6 @@ export default function ChatView() {
       
       if (!res.ok) throw new Error("Error al asignar chat");
       
-      // Éxito
       setShowFolderPopup(false);
       alert("¡Chat agregado a la carpeta!");
     } catch (err) {
@@ -125,15 +120,12 @@ export default function ChatView() {
       const data = await res.json();
       setCurrentChatId(chatId);
       
-      // Procesar mensajes para extraer plotSpec si está embebido
       const processedMessages = (data.messages || []).map(msg => {
         if (msg.role === "assistant" && typeof msg.content === "string") {
-          // Buscar <GRAPH_JSON>...</GRAPH_JSON>
           const graphMatch = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
           if (graphMatch) {
             try {
               const plotSpec = JSON.parse(graphMatch[1]);
-              // Remover el tag del content
               const cleanContent = msg.content.replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, '').trim();
               return {
                 ...msg,
@@ -172,58 +164,106 @@ export default function ChatView() {
 
   async function handleSolve() {
     if (!problemText.trim()) return;
-    
-    setIsLoading(true);
+
+    setIsLoading(false);
     setErrorMsg("");
 
-    // Agregar mensaje del usuario a la UI
     const userMsg = { role: "user", content: problemText };
-    setMessages((prev) => [...prev, userMsg]);
+
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      { role: "assistant", content: "", plotSpec: null, streaming: true },
+    ]);
+
+    const currentProblem = problemText;
+    const currentImage = imageFile;
+    setProblemText("");
+    setImageFile(null);
 
     try {
       const token = getToken?.() || "";
 
       const formData = new FormData();
-      formData.append("problem", problemText);
-      if (imageFile) formData.append("image", imageFile);
-      
-      // ✅ IMPORTANTE: Si hay un chat activo, enviar el chatId
-      if (currentChatId) {
-        formData.append("chatId", currentChatId);
-      }
+      formData.append("problem", currentProblem);
+      if (currentImage) formData.append("image", currentImage);
+      if (currentChatId) formData.append("chatId", currentChatId);
 
-      const res = await fetch(API_URL, {
+      const response = await fetch(API_URL, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
 
-      if (!res.ok) throw new Error(`Error ${res.status}`);
-      const data = await res.json();
+      if (!response.ok) throw new Error(`Error ${response.status}`);
 
-      // Agregar respuesta de la IA
-      const aiMsg = {
-        role: "assistant",
-        content: data.answerText || "",
-        plotSpec: data.plotSpec || null,
-      };
-      setMessages((prev) => [...prev, aiMsg]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let accumulatedText = "";
 
-      // Si es un chat nuevo, actualizar el currentChatId
-      if (data.chat?.chatId && !currentChatId) {
-        setCurrentChatId(data.chat.chatId);
-        loadChats(); // refrescar lista
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop();
+
+        for (const part of parts) {
+          const line = part.replace(/^data: /, "").trim();
+          if (!line) continue;
+
+          let event;
+          try {
+            event = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (event.type === "delta") {
+            accumulatedText += event.text;
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              updated[lastIdx] = {
+                ...updated[lastIdx],
+                content: accumulatedText,
+                streaming: true,
+              };
+              return updated;
+            });
+          } else if (event.type === "done") {
+            setMessages((prev) => {
+              const updated = [...prev];
+              const lastIdx = updated.length - 1;
+              updated[lastIdx] = {
+                role: "assistant",
+                content: accumulatedText,
+                plotSpec: event.plotSpec || null,
+                streaming: false,
+              };
+              return updated;
+            });
+
+            if (event.chat?.chatId && !currentChatId) {
+              setCurrentChatId(event.chat.chatId);
+              loadChats();
+            }
+          } else if (event.type === "error") {
+            throw new Error(event.message);
+          }
+        }
       }
-
-      // Limpiar input
-      setProblemText("");
-      setImageFile(null);
     } catch (err) {
       setErrorMsg(err?.message || "Error desconocido");
-      // Remover el mensaje del usuario si hubo error
-      setMessages((prev) => prev.slice(0, -1));
-    } finally {
-      setIsLoading(false);
+      setMessages((prev) => {
+        const updated = [...prev];
+        if (updated[updated.length - 1]?.streaming) {
+          updated.pop();
+        }
+        return updated;
+      });
     }
   }
 
@@ -274,6 +314,17 @@ export default function ChatView() {
           ))}
         </div>
 
+        {/* Upgrade widget en el sidebar */}
+        <div className="sidebar-upgrade" onClick={() => navigate("/plans")}>
+          <div className="sidebar-upgrade-glow" />
+          <div className="sidebar-upgrade-icon">⚡</div>
+          <div className="sidebar-upgrade-content">
+            <span className="sidebar-upgrade-title">Subí tu plan</span>
+            <span className="sidebar-upgrade-desc">Más mensajes y funciones avanzadas</span>
+          </div>
+          <span className="sidebar-upgrade-arrow">→</span>
+        </div>
+
         <button
           className="sidebar-toggle"
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -293,10 +344,8 @@ export default function ChatView() {
           )}
 
           {messages.map((msg, idx) => {
-            // Validar que el mensaje tenga estructura correcta
             if (!msg || typeof msg !== 'object') return null;
             
-            // Asegurar que content sea string
             const content = typeof msg.content === 'string' 
               ? msg.content 
               : typeof msg.content === 'object'
@@ -309,19 +358,20 @@ export default function ChatView() {
                   {msg.role === "user" ? (
                     <p>{content}</p>
                   ) : (
-                    <>
+                    <div className="assistant-message-body">
                       <ReactMarkdown
                         remarkPlugins={[remarkMath]}
                         rehypePlugins={[rehypeKatex]}
                       >
                         {normalizeMath(content)}
                       </ReactMarkdown>
-                      {msg.plotSpec && (
-                        <MessagePlot plotSpec={msg.plotSpec} />
-                      )}
-                    </>
+                    </div>
                   )}
                 </div>
+                {/* Plot va FUERA del bubble, debajo del mensaje */}
+                {msg.role === "assistant" && msg.plotSpec && (
+                  <MessagePlot plotSpec={msg.plotSpec} />
+                )}
               </div>
             );
           })}
@@ -449,8 +499,9 @@ export default function ChatView() {
 }
 
 function MessagePlot({ plotSpec }) {
+  const [minimized, setMinimized] = useState(false);
   const plotResult = interpretPlot(plotSpec);
-  
+
   if (plotResult.error) {
     return <p className="plot-error">{plotResult.error}</p>;
   }
@@ -458,13 +509,34 @@ function MessagePlot({ plotSpec }) {
   if (!plotResult.model) return null;
 
   return (
-    <div className="message-plot">
-      <Plot
-        data={plotResult.model.data}
-        layout={plotResult.model.layout}
-        useResizeHandler
-        style={{ width: "100%" }}
-      />
+    <div className={`message-plot-wrapper ${minimized ? "minimized" : "expanded"}`}>
+      <div className="message-plot-header">
+        <span className="message-plot-title">📊 Gráfico</span>
+        <button
+          className="message-plot-toggle"
+          onClick={() => setMinimized((v) => !v)}
+          title={minimized ? "Expandir gráfico" : "Minimizar gráfico"}
+        >
+          {minimized ? "⤢ Expandir" : "⤡ Minimizar"}
+        </button>
+      </div>
+      {!minimized && (
+        <div className="message-plot-body">
+          <Plot
+            data={plotResult.model.data}
+            layout={{
+              ...plotResult.model.layout,
+              autosize: true,
+              paper_bgcolor: "rgba(0,0,0,0)",
+              plot_bgcolor: "rgba(18,18,26,0.6)",
+              font: { color: "#e0e0e0" },
+            }}
+            useResizeHandler
+            style={{ width: "100%", height: "420px" }}
+            config={{ responsive: true, displayModeBar: true }}
+          />
+        </div>
+      )}
     </div>
   );
 }

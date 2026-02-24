@@ -68,6 +68,27 @@ export default function Dashboard({ onLogout }) {
           <div className="stat-label">Exámenes generados</div>
         </div>
       </div>
+
+      {/* Upgrade Banner */}
+      <div className="dashboard-upgrade-banner" onClick={() => navigate("/plans")}>
+        <div className="upgrade-banner-left">
+          <div className="upgrade-banner-icon">⚡</div>
+          <div className="upgrade-banner-text">
+            <span className="upgrade-banner-title">Desbloqueá el plan Premium</span>
+            <span className="upgrade-banner-desc">Más mensajes, modelos avanzados, carpetas ilimitadas y exportación PDF</span>
+          </div>
+        </div>
+        <div className="upgrade-banner-actions">
+          <span className="upgrade-banner-price">Desde <strong>$4.99/mes</strong></span>
+          <button
+            className="upgrade-banner-btn"
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate("/plans"); }}
+          >
+            Ver planes →
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -209,7 +209,7 @@ export default function FolderChatView() {
           📁 {folderName}
         </div>
 
-        {/* ✅ NUEVO: Botón de Flashcards */}
+        {/* Botón de Flashcards */}
         <button
           className="folder-flashcards-btn"
           onClick={() => navigate(`/folder/${folderId}/flashcards`)}
@@ -235,6 +235,17 @@ export default function FolderChatView() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Upgrade widget */}
+        <div className="sidebar-upgrade" onClick={() => navigate("/plans")}>
+          <div className="sidebar-upgrade-glow" />
+          <div className="sidebar-upgrade-icon">⚡</div>
+          <div className="sidebar-upgrade-content">
+            <span className="sidebar-upgrade-title">Subí tu plan</span>
+            <span className="sidebar-upgrade-desc">Más mensajes y funciones avanzadas</span>
+          </div>
+          <span className="sidebar-upgrade-arrow">→</span>
         </div>
 
         <button
