@@ -11,6 +11,49 @@ import { interpretPlot } from "../utils/plotInterpreter";
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
 
+// ── Model Selector ──────────────────────────────────────────────────────────
+function ModelSelector({ models, selectedKey, onChange }) {
+  const [open, setOpen] = useState(false);
+  const selected = models.find((m) => m.key === selectedKey) || models[0];
+  if (!selected || models.length <= 1) return null;
+
+  return (
+    <div className="model-selector">
+      <button
+        className="model-selector__trigger"
+        onClick={() => setOpen((v) => !v)}
+        title="Cambiar modelo"
+      >
+        <span className="model-selector__name">{selected.displayName}</span>
+        {selected.cost > 1 && (
+          <span className="model-selector__cost">×{selected.cost}</span>
+        )}
+        <span className="model-selector__chevron">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="model-selector__dropdown">
+          {models.map((m) => (
+            <button
+              key={m.key}
+              className={`model-selector__option ${m.key === selectedKey ? "active" : ""}`}
+              onClick={() => { onChange(m.key); setOpen(false); }}
+            >
+              <div className="model-selector__option-left">
+                <span className="model-selector__option-name">{m.displayName}</span>
+                <span className="model-selector__option-desc">{m.description}</span>
+              </div>
+              {m.cost > 1 && (
+                <span className="model-selector__option-cost">×{m.cost} msgs</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Smart Folder Nudge ──────────────────────────────────────────────────────
 function FolderNudge({ suggestion, folders, onAssignExisting, onCreateNew, onDismiss }) {
   const [busy, setBusy] = useState(false);
@@ -90,12 +133,17 @@ export default function ChatView() {
   const [messages, setMessages] = useState([]);
   const [problemText, setProblemText] = useState("");
   const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [showFolderPopup, setShowFolderPopup] = useState(false);
   const [folders, setFolders] = useState([]);
 
   const fileInputRef = useRef(null);
+
+  // Model state
+  const [availableModels, setAvailableModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState("mth-mini");
 
   // Nudge state
   const [nudgeSuggestion, setNudgeSuggestion] = useState(null); // { folderName, isExisting }
@@ -106,6 +154,7 @@ export default function ChatView() {
   useEffect(() => {
     loadChats();
     loadFolders();
+    loadModels();
   }, []);
 
   useEffect(() => {
@@ -115,6 +164,34 @@ export default function ChatView() {
       isFirstMessage.current = false;
     }
   }, [searchParams]);
+
+  // Preview de imagen
+  useEffect(() => {
+    if (!imageFile) { setImagePreview(null); return; }
+    const url = URL.createObjectURL(imageFile);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
+
+  function handleRemoveImage() {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function loadModels() {
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_URL}models`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAvailableModels(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error cargando modelos:", err);
+    }
+  }
 
   async function loadChats() {
     try {
@@ -231,6 +308,10 @@ export default function ChatView() {
             } catch {}
           }
         }
+        // Si el mensaje de usuario tiene imageUrl (presigned desde S3), la usamos como preview
+        if (msg.role === "user" && msg.imageUrl) {
+          return { ...msg, imagePreview: msg.imageUrl };
+        }
         return msg;
       });
       setMessages(processed);
@@ -264,9 +345,11 @@ export default function ChatView() {
     setIsLoading(false);
     setErrorMsg("");
 
+    const sentPreview = imagePreview;
+
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: problemText },
+      { role: "user", content: problemText, imagePreview: sentPreview },
       { role: "assistant", content: "", plotSpec: null, streaming: true },
     ]);
 
@@ -274,6 +357,7 @@ export default function ChatView() {
     const currentImage = imageFile;
     setProblemText("");
     setImageFile(null);
+    setImagePreview(null);
 
     try {
       const token = getToken?.() || "";
@@ -281,6 +365,7 @@ export default function ChatView() {
       formData.append("problem", currentProblem);
       if (currentImage) formData.append("image", currentImage);
       if (currentChatId) formData.append("chatId", currentChatId);
+      formData.append("modelKey", selectedModel);
 
       const response = await fetch(API_URL, {
         method: "POST",
@@ -358,6 +443,7 @@ export default function ChatView() {
     setMessages([]);
     setProblemText("");
     setImageFile(null);
+    setImagePreview(null);
     setNudgeSuggestion(null);
     setNudgeDismissed(false);
     firstMessageRef.current = null;
@@ -423,6 +509,11 @@ export default function ChatView() {
 
             return (
               <div key={idx} className={`chat-message chat-message--${msg.role || "user"}`}>
+                {msg.role === "user" && msg.imagePreview && (
+                  <div className="message-image-preview">
+                    <img src={msg.imagePreview} alt="Imagen adjunta" />
+                  </div>
+                )}
                 <div className="chat-message-content">
                   {msg.role === "user" ? (
                     <p>{content}</p>
@@ -490,6 +581,15 @@ export default function ChatView() {
         {/* Input */}
         <div className="chat-input-area">
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
+
+          {/* Preview de imagen antes de enviar */}
+          {imagePreview && (
+            <div className="input-image-preview">
+              <img src={imagePreview} alt="Imagen a enviar" />
+              <button className="input-image-preview__remove" onClick={handleRemoveImage}>✕</button>
+            </div>
+          )}
+
           <div className="chat-input-wrap">
             <textarea
               value={problemText}
@@ -511,12 +611,11 @@ export default function ChatView() {
               <button type="button" className="btn-attach" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
                 📎
               </button>
-              {imageFile && (
-                <span className="file-badge">
-                  Imagen adjunta
-                  <button type="button" onClick={() => setImageFile(null)} className="file-badge-remove">✕</button>
-                </span>
-              )}
+              <ModelSelector
+                models={availableModels}
+                selectedKey={selectedModel}
+                onChange={setSelectedModel}
+              />
               <button onClick={handleSolve} disabled={isLoading || !problemText.trim()} className="btn-send">
                 {isLoading ? "..." : "Enviar"}
               </button>

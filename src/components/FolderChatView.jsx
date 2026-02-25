@@ -11,6 +11,50 @@ import { interpretPlot } from "../utils/plotInterpreter";
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
 
+// ── Model Selector ──────────────────────────────────────────────────────────
+function ModelSelector({ models, selectedKey, onChange }) {
+  const [open, setOpen] = useState(false);
+  const selected = models.find((m) => m.key === selectedKey) || models[0];
+  if (!selected || models.length <= 1) return null;
+
+  return (
+    <div className="model-selector">
+      <button
+        className="model-selector__trigger"
+        onClick={() => setOpen((v) => !v)}
+        title="Cambiar modelo"
+      >
+        <span className="model-selector__name">{selected.displayName}</span>
+        {selected.cost > 1 && (
+          <span className="model-selector__cost">×{selected.cost}</span>
+        )}
+        <span className="model-selector__chevron">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="model-selector__dropdown">
+          {models.map((m) => (
+            <button
+              key={m.key}
+              className={`model-selector__option ${m.key === selectedKey ? "active" : ""}`}
+              onClick={() => { onChange(m.key); setOpen(false); }}
+            >
+              <div className="model-selector__option-left">
+                <span className="model-selector__option-name">{m.displayName}</span>
+                <span className="model-selector__option-desc">{m.description}</span>
+              </div>
+              {m.cost > 1 && (
+                <span className="model-selector__option-cost">×{m.cost} msgs</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────────────────────
 export default function FolderChatView() {
   const navigate = useNavigate();
   const { folderId } = useParams();
@@ -21,16 +65,44 @@ export default function FolderChatView() {
   const [messages, setMessages] = useState([]);
   const [problemText, setProblemText] = useState("");
   const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const fileInputRef = useRef(null);
+
+  // Model state
+  const [availableModels, setAvailableModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState("mth-mini");
 
   useEffect(() => {
     if (folderId) {
       loadFolderChats();
       loadFolderInfo();
     }
+    loadModels();
   }, [folderId]);
+
+  // Generar preview cuando cambia la imagen
+  useEffect(() => {
+    if (!imageFile) { setImagePreview(null); return; }
+    const url = URL.createObjectURL(imageFile);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
+
+  async function loadModels() {
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_URL}models`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAvailableModels(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error cargando modelos:", err);
+    }
+  }
 
   async function loadFolderInfo() {
     try {
@@ -58,11 +130,7 @@ export default function FolderChatView() {
       if (!res.ok) throw new Error("Error al cargar chats de carpeta");
       const data = await res.json();
       const sortedChats = Array.isArray(data)
-        ? data.sort(
-            (a, b) =>
-              new Date(b.createdAt || b.chatId) -
-              new Date(a.createdAt || a.chatId)
-          )
+        ? data.sort((a, b) => new Date(b.createdAt || b.chatId) - new Date(a.createdAt || a.chatId))
         : [];
       setChats(sortedChats);
     } catch (err) {
@@ -82,20 +150,19 @@ export default function FolderChatView() {
       setCurrentChatId(chatId);
       const processedMessages = (data.messages || []).map((msg) => {
         if (msg.role === "assistant" && typeof msg.content === "string") {
-          const graphMatch = msg.content.match(
-            /<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/
-          );
+          const graphMatch = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
           if (graphMatch) {
             try {
               const plotSpec = JSON.parse(graphMatch[1]);
-              const cleanContent = msg.content
-                .replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, "")
-                .trim();
+              const cleanContent = msg.content.replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, "").trim();
               return { ...msg, content: cleanContent, plotSpec };
             } catch (e) {
               console.error("Error parseando GRAPH_JSON:", e);
             }
           }
+        }
+        if (msg.role === "user" && msg.imageUrl) {
+          return { ...msg, imagePreview: msg.imageUrl };
         }
         return msg;
       });
@@ -112,25 +179,30 @@ export default function FolderChatView() {
     for (const item of items) {
       if (item.type.startsWith("image/")) {
         const file = item.getAsFile();
-        if (file) {
-          imageFound = true;
-          setImageFile(file);
-        }
+        if (file) { imageFound = true; setImageFile(file); }
       }
     }
     if (imageFound) e.preventDefault();
   }
 
+  function handleRemoveImage() {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   async function handleSolve() {
     if (!problemText.trim()) return;
 
-    setIsLoading(false);
+    setIsLoading(true);
     setErrorMsg("");
 
-    const userMsg = { role: "user", content: problemText };
+    // Guardamos preview para mostrarlo en el mensaje enviado
+    const sentPreview = imagePreview;
+
     setMessages((prev) => [
       ...prev,
-      userMsg,
+      { role: "user", content: problemText, imagePreview: sentPreview },
       { role: "assistant", content: "", plotSpec: null, streaming: true },
     ]);
 
@@ -138,6 +210,7 @@ export default function FolderChatView() {
     const currentImage = imageFile;
     setProblemText("");
     setImageFile(null);
+    setImagePreview(null);
 
     try {
       const token = getToken?.() || "";
@@ -145,6 +218,7 @@ export default function FolderChatView() {
       formData.append("problem", currentProblem);
       if (currentImage) formData.append("image", currentImage);
       if (currentChatId) formData.append("chatId", currentChatId);
+      formData.append("modelKey", selectedModel);
 
       const response = await fetch(API_URL, {
         method: "POST",
@@ -170,31 +244,20 @@ export default function FolderChatView() {
         for (const part of parts) {
           const line = part.replace(/^data: /, "").trim();
           if (!line) continue;
-
           let event;
-          try {
-            event = JSON.parse(line);
-          } catch {
-            continue;
-          }
+          try { event = JSON.parse(line); } catch { continue; }
 
           if (event.type === "delta") {
             accumulatedText += event.text;
             setMessages((prev) => {
               const updated = [...prev];
-              const lastIdx = updated.length - 1;
-              updated[lastIdx] = {
-                ...updated[lastIdx],
-                content: accumulatedText,
-                streaming: true,
-              };
+              updated[updated.length - 1] = { ...updated[updated.length - 1], content: accumulatedText, streaming: true };
               return updated;
             });
           } else if (event.type === "done") {
             setMessages((prev) => {
               const updated = [...prev];
-              const lastIdx = updated.length - 1;
-              updated[lastIdx] = {
+              updated[updated.length - 1] = {
                 role: "assistant",
                 content: accumulatedText,
                 plotSpec: event.plotSpec || null,
@@ -206,22 +269,14 @@ export default function FolderChatView() {
             if (event.chat?.chatId && !currentChatId) {
               const newChatId = event.chat.chatId;
               setCurrentChatId(newChatId);
-
-              // Auto-assign to current folder
               try {
-                await fetch(
-                  `${API_BASE}/folder/${folderId}/chats/${newChatId}`,
-                  {
-                    method: "POST",
-                    headers: token
-                      ? { Authorization: `Bearer ${token}` }
-                      : {},
-                  }
-                );
+                await fetch(`${API_BASE}/folder/${folderId}/chats/${newChatId}`, {
+                  method: "POST",
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
               } catch (err) {
                 console.error("Error asignando chat a carpeta:", err);
               }
-
               loadFolderChats();
             }
           } else if (event.type === "error") {
@@ -236,6 +291,8 @@ export default function FolderChatView() {
         if (updated[updated.length - 1]?.streaming) updated.pop();
         return updated;
       });
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -244,6 +301,7 @@ export default function FolderChatView() {
     setMessages([]);
     setProblemText("");
     setImageFile(null);
+    setImagePreview(null);
   }
 
   return (
@@ -251,44 +309,27 @@ export default function FolderChatView() {
       {/* Sidebar */}
       <div className={`chat-sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="chat-sidebar-header">
-          <button
-            className="btn-icon btn-back"
-            onClick={() => navigate("/study")}
-            title="Volver a Estudios"
-          >
-            ←
-          </button>
-          <button className="btn-new-chat" onClick={startNewChat}>
-            + Nuevo Chat
-          </button>
+          <button className="btn-icon btn-back" onClick={() => navigate("/study")} title="Volver a Estudios">←</button>
+          <button className="btn-new-chat" onClick={startNewChat}>+ Nuevo Chat</button>
         </div>
 
         <div className="folder-sidebar-title">📁 {folderName}</div>
 
-        <button
-          className="folder-flashcards-btn"
-          onClick={() => navigate(`/folder/${folderId}/flashcards`)}
-        >
+        <button className="folder-flashcards-btn" onClick={() => navigate(`/folder/${folderId}/flashcards`)}>
           🧠 Flashcards
         </button>
 
         <div className="chat-list">
-          {chats.length === 0 && (
-            <p className="chat-list-empty">No hay chats en esta carpeta</p>
-          )}
+          {chats.length === 0 && <p className="chat-list-empty">No hay chats en esta carpeta</p>}
           {chats.map((chat) => (
             <div
               key={chat.chatId || chat.id}
-              className={`chat-item ${
-                currentChatId === (chat.chatId || chat.id) ? "active" : ""
-              }`}
+              className={`chat-item ${currentChatId === (chat.chatId || chat.id) ? "active" : ""}`}
               onClick={() => loadChat(chat.chatId || chat.id)}
             >
               <div className="chat-item-title">{chat.title || "Sin título"}</div>
               <div className="chat-item-date">
-                {chat.createdAt
-                  ? new Date(chat.createdAt).toLocaleDateString()
-                  : ""}
+                {chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ""}
               </div>
             </div>
           ))}
@@ -299,17 +340,12 @@ export default function FolderChatView() {
           <div className="sidebar-upgrade-icon">⚡</div>
           <div className="sidebar-upgrade-content">
             <span className="sidebar-upgrade-title">Subí tu plan</span>
-            <span className="sidebar-upgrade-desc">
-              Más mensajes y funciones avanzadas
-            </span>
+            <span className="sidebar-upgrade-desc">Más mensajes y funciones avanzadas</span>
           </div>
           <span className="sidebar-upgrade-arrow">→</span>
         </div>
 
-        <button
-          className="sidebar-toggle"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-        >
+        <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
           {sidebarOpen ? "◀" : "▶"}
         </button>
       </div>
@@ -320,44 +356,36 @@ export default function FolderChatView() {
           {messages.length === 0 && (
             <div className="chat-empty">
               <h2>¡Empezá una conversación!</h2>
-              <p>
-                Los chats que crees acá se guardan automáticamente en "
-                {folderName}"
-              </p>
+              <p>Los chats que crees acá se guardan automáticamente en "{folderName}"</p>
             </div>
           )}
 
           {messages.map((msg, idx) => {
             if (!msg || typeof msg !== "object") return null;
             const content =
-              typeof msg.content === "string"
-                ? msg.content
-                : typeof msg.content === "object"
-                ? JSON.stringify(msg.content)
-                : String(msg.content || "");
+              typeof msg.content === "string" ? msg.content
+              : typeof msg.content === "object" ? JSON.stringify(msg.content)
+              : String(msg.content || "");
 
             return (
-              <div
-                key={idx}
-                className={`chat-message chat-message--${msg.role || "user"}`}
-              >
+              <div key={idx} className={`chat-message chat-message--${msg.role || "user"}`}>
+                {msg.role === "user" && msg.imagePreview && (
+                  <div className="message-image-preview">
+                    <img src={msg.imagePreview} alt="Imagen adjunta" />
+                  </div>
+                )}
                 <div className="chat-message-content">
                   {msg.role === "user" ? (
                     <p>{content}</p>
                   ) : (
                     <div className="assistant-message-body">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkMath]}
-                        rehypePlugins={[rehypeKatex]}
-                      >
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
                         {normalizeMath(content)}
                       </ReactMarkdown>
                     </div>
                   )}
                 </div>
-                {msg.role === "assistant" && msg.plotSpec && (
-                  <MessagePlot plotSpec={msg.plotSpec} />
-                )}
+                {msg.role === "assistant" && msg.plotSpec && <MessagePlot plotSpec={msg.plotSpec} />}
               </div>
             );
           })}
@@ -365,11 +393,7 @@ export default function FolderChatView() {
           {isLoading && (
             <div className="chat-message chat-message--assistant">
               <div className="chat-message-content">
-                <div className="typing-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
+                <div className="typing-indicator"><span /><span /><span /></div>
               </div>
             </div>
           )}
@@ -379,17 +403,20 @@ export default function FolderChatView() {
         <div className="chat-input-area">
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
 
+          {/* Preview de imagen antes de enviar */}
+          {imagePreview && (
+            <div className="input-image-preview">
+              <img src={imagePreview} alt="Imagen a enviar" />
+              <button className="input-image-preview__remove" onClick={handleRemoveImage}>✕</button>
+            </div>
+          )}
+
           <div className="chat-input-wrap">
             <textarea
               value={problemText}
               onChange={(e) => setProblemText(e.target.value)}
               onPaste={handlePaste}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSolve();
-                }
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSolve(); } }}
               rows={3}
               placeholder="Escribí tu problema matemático... (Enter para enviar)"
               disabled={isLoading}
@@ -404,33 +431,17 @@ export default function FolderChatView() {
             />
 
             <div className="chat-input-actions">
-              <button
-                type="button"
-                className="btn-attach"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
-              >
+              <button type="button" className="btn-attach" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
                 📎
               </button>
 
-              {imageFile && (
-                <span className="file-badge">
-                  Imagen adjunta
-                  <button
-                    type="button"
-                    onClick={() => setImageFile(null)}
-                    className="file-badge-remove"
-                  >
-                    ✕
-                  </button>
-                </span>
-              )}
+              <ModelSelector
+                models={availableModels}
+                selectedKey={selectedModel}
+                onChange={setSelectedModel}
+              />
 
-              <button
-                onClick={handleSolve}
-                disabled={isLoading || !problemText.trim()}
-                className="btn-send"
-              >
+              <button onClick={handleSolve} disabled={isLoading || !problemText.trim()} className="btn-send">
                 {isLoading ? "..." : "Enviar"}
               </button>
             </div>
@@ -444,20 +455,14 @@ export default function FolderChatView() {
 function MessagePlot({ plotSpec }) {
   const [minimized, setMinimized] = useState(false);
   const plotResult = interpretPlot(plotSpec);
-
   if (plotResult.error) return <p className="plot-error">{plotResult.error}</p>;
   if (!plotResult.model) return null;
 
   return (
-    <div
-      className={`message-plot-wrapper ${minimized ? "minimized" : "expanded"}`}
-    >
+    <div className={`message-plot-wrapper ${minimized ? "minimized" : "expanded"}`}>
       <div className="message-plot-header">
         <span className="message-plot-title">📊 Gráfico</span>
-        <button
-          className="message-plot-toggle"
-          onClick={() => setMinimized((v) => !v)}
-        >
+        <button className="message-plot-toggle" onClick={() => setMinimized((v) => !v)}>
           {minimized ? "⤢ Expandir" : "⤡ Minimizar"}
         </button>
       </div>
