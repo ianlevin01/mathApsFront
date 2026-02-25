@@ -17,6 +17,7 @@ import PlansPage from "./components/PlansPage";
 import { getToken, removeToken } from "./auth.js";
 import { normalizeMath } from "./utils/mathUtils";
 import { interpretPlot } from "./utils/plotInterpreter";
+import VerifyEmail from "./components/VerifyEmail";
 
 import "./App.css";
 import "./index.css";
@@ -181,6 +182,7 @@ export default function App() {
           {/* Rutas legales - PÚBLICAS */}
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           {/* Rutas protegidas */}
           <Route
