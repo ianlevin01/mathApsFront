@@ -1,15 +1,44 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Plot from "react-plotly.js";
-import ReactMarkdown from "react-markdown";
-import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
+import renderMathInElement from "katex/dist/contrib/auto-render";
+import { marked } from "marked";
 import { getToken, getEmailFromToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
 
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
+
+// ── Streaming-safe message renderer ────────────────────────────────────────
+// Usa innerHTML + KaTeX auto-render manual para evitar el conflicto de
+// reconciliación de React con los nodos que KaTeX muta directamente en el DOM.
+function StreamingMessage({ content }) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // 1. Markdown → HTML (marked es síncrono y no muta nodos externos)
+    const normalized = normalizeMath(content);
+    const html = marked.parse(normalized, { breaks: true });
+    containerRef.current.innerHTML = html;
+
+    // 2. KaTeX renderiza sobre los nodos YA insertados en el DOM.
+    //    React nunca diferea los hijos de este div, así que no hay conflicto.
+    renderMathInElement(containerRef.current, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$", right: "$", display: false },
+        { left: "\\(", right: "\\)", display: false },
+        { left: "\\[", right: "\\]", display: true },
+      ],
+      throwOnError: false, // no explotar si hay LaTeX incompleto durante stream
+    });
+  }, [content]);
+
+  return <div ref={containerRef} className="assistant-message-body" />;
+}
 
 // ── Model Selector ──────────────────────────────────────────────────────────
 function ModelSelector({ models, selectedKey, onChange }) {
@@ -58,7 +87,6 @@ function ModelSelector({ models, selectedKey, onChange }) {
 function FolderNudge({ suggestion, folders, onAssignExisting, onCreateNew, onDismiss }) {
   const [busy, setBusy] = useState(false);
 
-  // isExisting true → la IA dice que ya hay una carpeta que encaja
   const matchedFolder = suggestion.isExisting
     ? folders.find((f) => f.name === suggestion.folderName)
     : null;
@@ -93,7 +121,6 @@ function FolderNudge({ suggestion, folders, onAssignExisting, onCreateNew, onDis
     );
   }
 
-  // No existe → sugerir crear
   return (
     <div className="folder-nudge folder-nudge--create">
       <div className="folder-nudge__icon">📁</div>
@@ -146,9 +173,9 @@ export default function ChatView() {
   const [selectedModel, setSelectedModel] = useState("mth-mini");
 
   // Nudge state
-  const [nudgeSuggestion, setNudgeSuggestion] = useState(null); // { folderName, isExisting }
+  const [nudgeSuggestion, setNudgeSuggestion] = useState(null);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
-  const firstMessageRef = useRef(null); // guardamos el texto del primer mensaje
+  const firstMessageRef = useRef(null);
   const isFirstMessage = useRef(true);
 
   useEffect(() => {
@@ -279,7 +306,7 @@ export default function ChatView() {
         body: JSON.stringify({ firstMessage }),
       });
       if (!res.ok) return;
-      const suggestion = await res.json(); // { folderName, isExisting }
+      const suggestion = await res.json();
       setNudgeSuggestion(suggestion);
     } catch (e) {
       console.error("Error obteniendo sugerencia de carpeta:", e);
@@ -308,7 +335,6 @@ export default function ChatView() {
             } catch {}
           }
         }
-        // Si el mensaje de usuario tiene imageUrl (presigned desde S3), la usamos como preview
         if (msg.role === "user" && msg.imageUrl) {
           return { ...msg, imagePreview: msg.imageUrl };
         }
@@ -380,6 +406,9 @@ export default function ChatView() {
       let buffer = "";
       let accumulatedText = "";
 
+      // RAF para throttlear updates del DOM y evitar renders demasiado frecuentes
+      let rafId = null;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -395,12 +424,30 @@ export default function ChatView() {
 
           if (event.type === "delta") {
             accumulatedText += event.text;
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { ...updated[updated.length - 1], content: accumulatedText, streaming: true };
-              return updated;
-            });
+
+            // Throttle: solo actualizar estado una vez por frame de animación
+            if (!rafId) {
+              const textSnapshot = accumulatedText;
+              rafId = requestAnimationFrame(() => {
+                rafId = null;
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    ...updated[updated.length - 1],
+                    content: accumulatedText,
+                    streaming: true,
+                  };
+                  return updated;
+                });
+              });
+            }
           } else if (event.type === "done") {
+            // Cancelar cualquier RAF pendiente antes del update final
+            if (rafId) {
+              cancelAnimationFrame(rafId);
+              rafId = null;
+            }
+
             setMessages((prev) => {
               const updated = [...prev];
               updated[updated.length - 1] = {
@@ -416,7 +463,6 @@ export default function ChatView() {
               setCurrentChatId(event.chat.chatId);
               loadChats();
 
-              // Pedir sugerencia de carpeta después de la primera respuesta
               if (isFirst && !nudgeDismissed) {
                 setTimeout(() => {
                   fetchFolderSuggestion(firstMessageRef.current);
@@ -518,11 +564,9 @@ export default function ChatView() {
                   {msg.role === "user" ? (
                     <p>{content}</p>
                   ) : (
-                    <div className="assistant-message-body">
-                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {normalizeMath(content)}
-                      </ReactMarkdown>
-                    </div>
+                    // StreamingMessage maneja su propio DOM para evitar el
+                    // conflicto de reconciliación de React con KaTeX
+                    <StreamingMessage content={content} />
                   )}
                 </div>
                 {msg.role === "assistant" && msg.plotSpec && <MessagePlot plotSpec={msg.plotSpec} />}
@@ -582,7 +626,6 @@ export default function ChatView() {
         <div className="chat-input-area">
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
 
-          {/* Preview de imagen antes de enviar */}
           {imagePreview && (
             <div className="input-image-preview">
               <img src={imagePreview} alt="Imagen a enviar" />
