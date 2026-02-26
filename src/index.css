@@ -914,13 +914,14 @@ section {
 }
 
 /* Dashboard y Study Hub también fullwidth */
-.dashboard,
 .study-hub {
   width: 100%;
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
 }
+
+
 /* =========================================================
    RESPONSIVE
 ========================================================= */

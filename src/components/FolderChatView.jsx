@@ -8,8 +8,8 @@ import { getToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
 
-const API_URL = "https://api.mathaps.online/math/";
-const API_BASE = "https://api.mathaps.online";
+const API_URL = "http://localhost:3000/math/";
+const API_BASE = "http://localhost:3000";
 
 // ── Model Selector ──────────────────────────────────────────────────────────
 function ModelSelector({ models, selectedKey, onChange }) {
@@ -70,7 +70,6 @@ export default function FolderChatView() {
   const [errorMsg, setErrorMsg] = useState("");
   const fileInputRef = useRef(null);
 
-  // Model state
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("mth-mini");
 
@@ -82,7 +81,6 @@ export default function FolderChatView() {
     loadModels();
   }, [folderId]);
 
-  // Generar preview cuando cambia la imagen
   useEffect(() => {
     if (!imageFile) { setImagePreview(null); return; }
     const url = URL.createObjectURL(imageFile);
@@ -196,8 +194,6 @@ export default function FolderChatView() {
 
     setIsLoading(true);
     setErrorMsg("");
-
-    // Guardamos preview para mostrarlo en el mensaje enviado
     const sentPreview = imagePreview;
 
     setMessages((prev) => [
@@ -315,9 +311,21 @@ export default function FolderChatView() {
 
         <div className="folder-sidebar-title">📁 {folderName}</div>
 
-        <button className="folder-flashcards-btn" onClick={() => navigate(`/folder/${folderId}/flashcards`)}>
-          🧠 Flashcards
-        </button>
+        {/* Practice buttons */}
+        <div className="folder-practice-btns">
+          <button
+            className="folder-flashcards-btn"
+            onClick={() => navigate(`/folder/${folderId}/flashcards`)}
+          >
+            🧠 Flashcards
+          </button>
+          <button
+            className="folder-dev-btn"
+            onClick={() => navigate(`/folder/${folderId}/dev-questions`)}
+          >
+            ✍️ Preguntas a desarrollo
+          </button>
+        </div>
 
         <div className="chat-list">
           {chats.length === 0 && <p className="chat-list-empty">No hay chats en esta carpeta</p>}
@@ -403,7 +411,6 @@ export default function FolderChatView() {
         <div className="chat-input-area">
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
 
-          {/* Preview de imagen antes de enviar */}
           {imagePreview && (
             <div className="input-image-preview">
               <img src={imagePreview} alt="Imagen a enviar" />
@@ -434,13 +441,11 @@ export default function FolderChatView() {
               <button type="button" className="btn-attach" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
                 📎
               </button>
-
               <ModelSelector
                 models={availableModels}
                 selectedKey={selectedModel}
                 onChange={setSelectedModel}
               />
-
               <button onClick={handleSolve} disabled={isLoading || !problemText.trim()} className="btn-send">
                 {isLoading ? "..." : "Enviar"}
               </button>
