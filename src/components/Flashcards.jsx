@@ -1,7 +1,30 @@
 import { useState } from "react";
 import { getToken } from "../auth";
 import { useParams, useNavigate } from "react-router-dom";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import { normalizeMath } from "../utils/mathUtils";
+import "katex/dist/katex.min.css";
 import "../styles/flashcards.css";
+
+// Componente auxiliar: renderiza texto que puede contener LaTeX inline o en bloque
+function MathText({ children, className }) {
+  return (
+    <span className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          // Evitar que ReactMarkdown envuelva en <p> dentro de elementos inline
+          p: ({ children }) => <span>{children}</span>,
+        }}
+      >
+        {normalizeMath(children ?? "")}
+      </ReactMarkdown>
+    </span>
+  );
+}
 
 const API_BASE = "https://api.mathaps.online";
 
@@ -42,6 +65,39 @@ export default function Flashcards() {
     }
   }
 
+  // Envía al backend las flashcards que el usuario respondió correctamente
+  async function saveCorrectFlashcards(correctResults, allFlashcards) {
+    try {
+      const token = getToken() || "";
+
+      // Armamos el array con la info que espera el endpoint
+      const correctCards = correctResults
+        .filter((r) => r.isCorrect)
+        .map((r) => {
+          const card = allFlashcards.find((c) => c.question === r.question);
+          return {
+            question: r.question,
+            correctId: card?.correctId ?? r.correct,
+          };
+        });
+
+      // Si no hubo ninguna correcta no hace falta llamar al endpoint
+      if (correctCards.length === 0) return;
+
+      await fetch(`${API_BASE}/folder/${folderId}/flashcards/correct`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ flashcards: correctCards }),
+      });
+    } catch (err) {
+      // No bloqueamos al usuario si falla el guardado
+      console.error("Error guardando flashcards correctas:", err);
+    }
+  }
+
   function handleSelect(optionId) {
     if (answered) return;
 
@@ -59,8 +115,13 @@ export default function Flashcards() {
     ]);
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (current + 1 >= flashcards.length) {
+      // Calculamos el listado final de resultados incluyendo la pregunta actual
+      const finalResults = [
+        ...results,
+      ];
+      await saveCorrectFlashcards(finalResults, flashcards);
       setPhase("done");
     } else {
       setCurrent((c) => c + 1);
@@ -164,7 +225,7 @@ export default function Flashcards() {
             {results.map((r, i) => (
               <div key={i} className={`fc-done-row ${r.isCorrect ? "fc-done-row--ok" : "fc-done-row--bad"}`}>
                 <span className="fc-done-row-icon">{r.isCorrect ? "✓" : "✗"}</span>
-                <span className="fc-done-row-q">{r.question}</span>
+                <MathText className="fc-done-row-q">{r.question}</MathText>
               </div>
             ))}
           </div>
@@ -202,7 +263,7 @@ export default function Flashcards() {
 
       {/* Card de pregunta */}
       <div className="fc-card">
-        <p className="fc-question">{card.question}</p>
+        <MathText className="fc-question">{card.question}</MathText>
 
         {/* Opciones */}
         <div className="fc-options">
@@ -224,7 +285,7 @@ export default function Flashcards() {
                 disabled={answered}
               >
                 <span className="fc-opt-letter">{opt.id}</span>
-                <span className="fc-opt-text">{opt.text}</span>
+                <MathText className="fc-opt-text">{opt.text}</MathText>
                 {answered && opt.id === card.correctId && (
                   <span className="fc-opt-check">✓</span>
                 )}
@@ -247,7 +308,7 @@ export default function Flashcards() {
                 {selected === card.correctId ? "¡Correcto!" : "Incorrecto"}
               </span>
             </div>
-            <p className="fc-feedback-explanation">{card.explanation}</p>
+            <MathText className="fc-feedback-explanation">{card.explanation}</MathText>
           </div>
         )}
 

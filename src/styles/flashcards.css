@@ -674,3 +674,57 @@
   .fc-done-num { font-size: 52px; }
   .fc-idle-card { padding: 36px 24px; }
 }
+/* =========================================================
+   AÑADIR AL FINAL DE flashcards.css
+   Soporte para renderizado LaTeX con KaTeX
+========================================================= */
+
+/* ── Pregunta ── */
+.fc-question .katex-display {
+  margin: 0.5em 0;
+  overflow-x: auto;
+}
+/* ReactMarkdown envuelve en <p>, lo aplanamos a inline */
+.fc-question > span > p {
+  display: inline;
+  margin: 0;
+}
+
+/* ── Opciones ── */
+.fc-opt-text .katex {
+  font-size: 0.95em;
+}
+/* Aplanar el <p> que genera ReactMarkdown dentro del botón */
+.fc-opt-text > p {
+  display: inline;
+  margin: 0;
+}
+.fc-opt-text .katex-display {
+  display: inline-block;
+  margin: 0;
+}
+
+/* ── Explicación del feedback ── */
+.fc-feedback-explanation .katex-display {
+  margin: 0.4em 0;
+  overflow-x: auto;
+}
+.fc-feedback-explanation > span > p {
+  display: inline;
+  margin: 0;
+}
+
+/* ── Resumen de la pantalla DONE ── */
+.fc-done-row-q .katex {
+  font-size: 0.88em;
+}
+.fc-done-row-q > span > p {
+  display: inline;
+  margin: 0;
+}
+.fc-done-row-q .katex-display {
+  display: inline-block;
+  margin: 0;
+  overflow-x: auto;
+  max-width: 100%;
+}
