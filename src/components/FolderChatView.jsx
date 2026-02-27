@@ -397,14 +397,6 @@ export default function FolderChatView() {
               </div>
             );
           })}
-
-          {isLoading && (
-            <div className="chat-message chat-message--assistant">
-              <div className="chat-message-content">
-                <div className="typing-indicator"><span /><span /><span /></div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Input area */}
