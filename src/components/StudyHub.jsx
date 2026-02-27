@@ -17,6 +17,48 @@ const FOLDER_SUGGESTIONS = [
   "Física matemática",
 ];
 
+// ── Animated Progress Ring ──────────────────────────────────────────────────
+// Arranca en 0 y anima hasta `target` cuando el componente monta
+// o cuando `target` cambia (viene del fetch de /progress)
+function ProgressRing({ target }) {
+  const RADIUS = 20;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS; // 125.66
+
+  // Arrancamos con 0 para que la animación se vea desde el principio
+  const [displayed, setDisplayed] = useState(0);
+
+  useEffect(() => {
+    if (target == null) return;
+    // Pequeño delay para que la card termine de entrar antes de animar el ring
+    const t = setTimeout(() => setDisplayed(target), 120);
+    return () => clearTimeout(t);
+  }, [target]);
+
+  const dash = (displayed / 100) * CIRCUMFERENCE;
+
+  return (
+    <div className="folder-progress">
+      <svg className="progress-ring" width="50" height="50">
+        <circle className="progress-ring-circle-bg" cx="25" cy="25" r={RADIUS} />
+        <circle
+          className="progress-ring-circle"
+          cx="25"
+          cy="25"
+          r={RADIUS}
+          style={{
+            strokeDasharray: `${dash} ${CIRCUMFERENCE}`,
+            // transición más larga y con ease-out para efecto de "llegar"
+            transition: "stroke-dasharray 900ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        />
+      </svg>
+      <div className="progress-text">
+        {target == null ? "…" : `${Math.round(displayed)}%`}
+      </div>
+    </div>
+  );
+}
+
 // ── Create Folder Popup ─────────────────────────────────────────────────────
 function CreateFolderPopup({ onClose, onCreate }) {
   const [name, setName] = useState("");
@@ -98,7 +140,7 @@ function CreateFolderPopup({ onClose, onCreate }) {
   );
 }
 
-// ── Pick Folder Modal (flashcards / desarrollo desde el strip) ──────────────
+// ── Pick Folder Modal ───────────────────────────────────────────────────────
 function PickFolderModal({ mode, folders, onPick, onClose }) {
   const modeLabel = mode === "flashcards" ? "Flashcards" : "Preguntas a desarrollo";
   const modeIcon  = mode === "flashcards" ? "🧠" : "✍️";
@@ -178,12 +220,39 @@ export default function StudyHub() {
   const [isLoadingChats, setIsLoadingChats] = useState(false);
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [quickAssignChat, setQuickAssignChat] = useState(null);
-  const [pickFolderMode, setPickFolderMode] = useState(null); // "flashcards" | "dev-questions" | null
+  const [pickFolderMode, setPickFolderMode] = useState(null);
+  // folderId → percentage (null = todavía cargando)
+  const [folderProgress, setFolderProgress] = useState({});
 
   useEffect(() => {
     loadFolders();
     loadAllChats();
   }, []);
+
+  // Cuando llegan las carpetas, pedimos los progress en paralelo
+  // La página ya se muestra con los rings en 0, y cuando llegan los datos animan
+  async function loadFolderProgressBatch(folderList) {
+    if (!folderList.length) return;
+    const token = getToken?.() || "";
+
+    const results = await Promise.allSettled(
+      folderList.map((folder) =>
+        fetch(`${API_BASE}/folder/${folder.id}/progress`, {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).then((r) => (r.ok ? r.json() : { percentage: 0 }))
+      )
+    );
+
+    const progressMap = {};
+    folderList.forEach((folder, i) => {
+      const result = results[i];
+      progressMap[folder.id] =
+        result.status === "fulfilled" ? (result.value.percentage ?? 0) : 0;
+    });
+
+    setFolderProgress(progressMap);
+  }
 
   async function loadFolders() {
     try {
@@ -205,6 +274,8 @@ export default function StudyHub() {
           })
         : [];
       setFolders(processed);
+      // Disparar la carga de progress después de que las cards ya se renderizan
+      loadFolderProgressBatch(processed);
     } catch {
       setFolders([]);
     }
@@ -336,42 +407,71 @@ export default function StudyHub() {
       {/* Header */}
       <div className="study-header">
         <button className="btn-back" onClick={() => navigate("/dashboard")}>← Dashboard</button>
-        <h1 className="study-title shine-platinum">Mis Estudios</h1>
+        <div className="study-header-text">
+          <h1 className="study-title shine-platinum">Mis Estudios</h1>
+          <p className="study-subtitle">Tu espacio de aprendizaje personalizado</p>
+        </div>
       </div>
 
-      {/* Quick-action tools strip */}
+      {/* Tools strip */}
       <div className="study-tools-strip">
         <div className="study-tool-card study-tool-card--chat" onClick={() => navigate("/chat")}>
-          <span className="study-tool-card__icon">📐</span>
+          <div className="study-tool-card__glow" />
+          <div className="study-tool-card__icon-wrap">
+            <span className="study-tool-card__icon">📐</span>
+          </div>
           <div className="study-tool-card__text">
             <span className="study-tool-card__title">Chat Matemático</span>
-            <span className="study-tool-card__sub">Resolvé problemas con IA</span>
+            <span className="study-tool-card__sub">Resolvé problemas con IA paso a paso</span>
           </div>
           <span className="study-tool-card__arrow">→</span>
         </div>
 
-        <div
-          className="study-tool-card study-tool-card--flash"
-          onClick={() => setPickFolderMode("flashcards")}
-        >
-          <span className="study-tool-card__icon">🧠</span>
+        <div className="study-tool-card study-tool-card--flash" onClick={() => setPickFolderMode("flashcards")}>
+          <div className="study-tool-card__glow" />
+          <div className="study-tool-card__icon-wrap">
+            <span className="study-tool-card__icon">🧠</span>
+          </div>
           <div className="study-tool-card__text">
             <span className="study-tool-card__title">Flashcards</span>
-            <span className="study-tool-card__sub">Múltiple opción con IA</span>
+            <span className="study-tool-card__sub">Practicá con preguntas de opción múltiple</span>
           </div>
           <span className="study-tool-card__arrow">→</span>
         </div>
 
-        <div
-          className="study-tool-card study-tool-card--dev"
-          onClick={() => setPickFolderMode("dev-questions")}
-        >
-          <span className="study-tool-card__icon">✍️</span>
+        <div className="study-tool-card study-tool-card--dev" onClick={() => setPickFolderMode("dev-questions")}>
+          <div className="study-tool-card__glow" />
+          <div className="study-tool-card__icon-wrap">
+            <span className="study-tool-card__icon">✍️</span>
+          </div>
           <div className="study-tool-card__text">
             <span className="study-tool-card__title">Preguntas a desarrollo</span>
-            <span className="study-tool-card__sub">Escribí y recibí corrección</span>
+            <span className="study-tool-card__sub">Escribí y recibí corrección con IA</span>
           </div>
           <span className="study-tool-card__arrow">→</span>
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="study-stats-row">
+        <div className="study-stat">
+          <span className="study-stat__value">{allChats.length}</span>
+          <span className="study-stat__label">Chats totales</span>
+        </div>
+        <div className="study-stat-divider" />
+        <div className="study-stat">
+          <span className="study-stat__value">{folders.length}</span>
+          <span className="study-stat__label">Carpetas</span>
+        </div>
+        <div className="study-stat-divider" />
+        <div className="study-stat">
+          <span className="study-stat__value">{folders.reduce((s, f) => s + (f.chatCount || 0), 0)}</span>
+          <span className="study-stat__label">Chats organizados</span>
+        </div>
+        <div className="study-stat-divider" />
+        <div className="study-stat">
+          <span className="study-stat__value">{unorganizedChats.length}</span>
+          <span className="study-stat__label">Sin organizar</span>
         </div>
       </div>
 
@@ -396,6 +496,7 @@ export default function StudyHub() {
           <FoldersView
             navigate={navigate}
             folders={folders}
+            folderProgress={folderProgress}
             selectedFolder={selectedFolder}
             folderChats={folderChats}
             allChats={allChats}
@@ -413,6 +514,28 @@ export default function StudyHub() {
         )}
         {view === "progress" && <ProgressView folders={folders} allChats={allChats} />}
       </div>
+
+      {/* Upgrade Banner */}
+      <div className="study-upgrade-banner" onClick={() => navigate("/plans")}>
+        <div className="study-upgrade-banner__glow" />
+        <div className="study-upgrade-banner__left">
+          <div className="study-upgrade-banner__icon">⚡</div>
+          <div className="study-upgrade-banner__text">
+            <span className="study-upgrade-banner__title">Desbloqueá el plan Premium</span>
+            <span className="study-upgrade-banner__desc">Carpetas ilimitadas, flashcards avanzadas y exportación de exámenes en PDF</span>
+          </div>
+        </div>
+        <div className="study-upgrade-banner__actions">
+          <span className="study-upgrade-banner__price">Desde <strong>$4.99/mes</strong></span>
+          <button
+            className="study-upgrade-banner__btn"
+            type="button"
+            onClick={(e) => { e.stopPropagation(); navigate("/plans"); }}
+          >
+            Ver planes →
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -421,6 +544,7 @@ export default function StudyHub() {
 function FoldersView({
   navigate,
   folders,
+  folderProgress,
   selectedFolder,
   folderChats,
   allChats,
@@ -477,20 +601,27 @@ function FoldersView({
         )}
 
         {Array.isArray(folders) &&
-          folders.map((folder) => {
+          folders.map((folder, i) => {
             if (!folder || !folder.id) return null;
-            const progress = 45;
+            // null = todavía no llegó la respuesta → ProgressRing muestra "…" y ring en 0
+            const progress = folderProgress[folder.id] ?? null;
+
             return (
               <div
                 key={folder.id}
                 className={`folder-card ${selectedFolder === folder.id ? "active" : ""}`}
+                style={{ animationDelay: `${i * 60}ms` }}
                 onClick={() => navigate(`/folder/${folder.id}`)}
               >
+                <div className="folder-card__bg" />
+
+                {/* Ring animado */}
+                <ProgressRing target={progress} />
+
                 <div className="folder-icon">📁</div>
                 <div className="folder-name">{folder.name || "Sin nombre"}</div>
                 <div className="folder-count">{folder.chatCount || 0} chats</div>
 
-                {/* Tool buttons inside card */}
                 <div className="folder-card-tools" onClick={(e) => e.stopPropagation()}>
                   <button
                     className="folder-tool-btn folder-tool-btn--flash"
@@ -507,18 +638,6 @@ function FoldersView({
                     ✍️
                   </button>
                 </div>
-
-                <div className="folder-progress">
-                  <svg className="progress-ring" width="50" height="50">
-                    <circle className="progress-ring-circle-bg" cx="25" cy="25" r="20" />
-                    <circle
-                      className="progress-ring-circle"
-                      cx="25" cy="25" r="20"
-                      style={{ strokeDasharray: `${(progress / 100) * 125.6} 125.6` }}
-                    />
-                  </svg>
-                  <div className="progress-text">{progress}%</div>
-                </div>
               </div>
             );
           })}
@@ -532,16 +651,10 @@ function FoldersView({
               <button className="btn-add-chat" onClick={() => setShowAddChat(!showAddChat)}>
                 + Agregar chat
               </button>
-              <button
-                className="btn-flashcards"
-                onClick={() => navigate(`/folder/${selectedFolder}/flashcards`)}
-              >
+              <button className="btn-flashcards" onClick={() => navigate(`/folder/${selectedFolder}/flashcards`)}>
                 🧠 Flashcards
               </button>
-              <button
-                className="btn-dev-questions"
-                onClick={() => navigate(`/folder/${selectedFolder}/dev-questions`)}
-              >
+              <button className="btn-dev-questions" onClick={() => navigate(`/folder/${selectedFolder}/dev-questions`)}>
                 ✍️ Desarrollo
               </button>
               <button className="btn-exam" onClick={() => generateExam(selectedFolder)}>
