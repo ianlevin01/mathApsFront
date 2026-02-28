@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { getToken } from "../auth"; // 👈 ajustá si tu helper está en otra ruta
 import "../styles/plans.css";
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://api.mathaps.online";
 
 const PLANS = [
   {

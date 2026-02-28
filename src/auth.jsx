@@ -2,7 +2,7 @@ import { useState } from "react";
 import { setToken } from "./auth";
 import { GoogleLogin } from "@react-oauth/google";
 
-const AUTH_BASE = "http://localhost:3000";
+const AUTH_BASE = "https://api.mathaps.online";
 
 export default function Auth({ onSuccess }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
