@@ -1,5 +1,8 @@
 import { useNavigate } from "react-router-dom";
+import { getToken } from "../auth"; // 👈 ajustá si tu helper está en otra ruta
 import "../styles/plans.css";
+
+const API_BASE = "http://localhost:3000";
 
 const PLANS = [
   {
@@ -18,8 +21,6 @@ const PLANS = [
     ],
     buttonText: "Plan actual",
     buttonClass: "plans-page-btn plans-page-btn--ghost",
-    footnote: "Sin tarjeta • Acceso inmediato",
-    checkoutUrl: null,
   },
   {
     id: "plus",
@@ -38,8 +39,6 @@ const PLANS = [
     ],
     buttonText: "Pasar a Plus",
     buttonClass: "plans-page-btn plans-page-btn--primary",
-    footnote: "Cancelás cuando quieras • Soporte prioritario",
-    checkoutUrl: "https://mathaps.lemonsqueezy.com/checkout/buy/3ee3dff9-23c1-4cb3-b46d-c496f4982136",
   },
   {
     id: "pro",
@@ -58,26 +57,66 @@ const PLANS = [
     ],
     buttonText: "Pasar a Pro",
     buttonClass: "plans-page-btn plans-page-btn--primary",
-    footnote: "Cancelás cuando quieras • Soporte premium 24/7",
-    checkoutUrl: "https://mathaps.lemonsqueezy.com/checkout/buy/21b4f93f-85f8-4105-8c43-f18a484e0f54",
   },
 ];
 
-function openLemonSqueezy(url) {
+function openLemonPopup(url) {
   if (!url) return;
-  // Abrir como popup de Lemon Squeezy
-  window.LemonSqueezy?.Setup({ eventHandler: () => {} });
-  // Si LemonSqueezy JS está cargado, usar su método de overlay
-  if (window.createLemonSqueezy) {
-    window.createLemonSqueezy();
-  }
-  // Agregar ?embed=1 para popup overlay
-  const popupUrl = url.includes("?") ? `${url}&embed=1` : `${url}?embed=1`;
-  window.open(popupUrl, "_blank", "width=480,height=720,scrollbars=yes,resizable=yes");
+
+  const popupUrl = url.includes("?")
+    ? `${url}&embed=1`
+    : `${url}?embed=1`;
+
+  window.open(
+    popupUrl,
+    "_blank",
+    "width=480,height=720,scrollbars=yes,resizable=yes"
+  );
 }
 
 export default function PlansPage() {
   const navigate = useNavigate();
+
+  async function handleCheckout(planId) {
+    if (planId === "free") return;
+
+    try {
+      const token = getToken();
+
+      if (!token) {
+        alert("Debes iniciar sesión");
+        return;
+      }
+
+      const response = await fetch(
+        `${API_BASE}/webhook/create-checkout`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            plan: planId,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(data);
+        alert("Error iniciando checkout");
+        return;
+      }
+
+      openLemonPopup(data.checkoutUrl);
+
+    } catch (error) {
+      console.error(error);
+      alert("Error conectando con el servidor");
+    }
+  }
 
   return (
     <div className="plans-page">
@@ -96,10 +135,12 @@ export default function PlansPage() {
         </div>
       </div>
 
-      {/* Comparison highlight */}
+      {/* Highlight */}
       <div className="plans-page-highlight">
         <span className="plans-highlight-icon">⚡</span>
-        <span>Los planes Premium incluyen acceso a modelos matemáticos más potentes y sin límites de organización</span>
+        <span>
+          Los planes Premium incluyen acceso a modelos matemáticos más potentes y sin límites de organización
+        </span>
       </div>
 
       {/* Cards */}
@@ -107,7 +148,9 @@ export default function PlansPage() {
         {PLANS.map((p) => (
           <article
             key={p.id}
-            className={`plans-page-card ${p.id !== "free" ? "plans-page-card--premium" : ""} ${p.id === "plus" ? "plans-page-card--featured" : ""}`}
+            className={`plans-page-card ${
+              p.id !== "free" ? "plans-page-card--premium" : ""
+            } ${p.id === "plus" ? "plans-page-card--featured" : ""}`}
           >
             {p.badge && <div className="plans-page-badge">{p.badge}</div>}
 
@@ -134,12 +177,16 @@ export default function PlansPage() {
               <button
                 className={p.buttonClass}
                 type="button"
-                onClick={() => openLemonSqueezy(p.checkoutUrl)}
-                disabled={!p.checkoutUrl}
+                onClick={() => handleCheckout(p.id)}
+                disabled={p.id === "free"}
               >
                 {p.buttonText}
               </button>
-              <p className="plans-page-footnote">{p.footnote}</p>
+              <p className="plans-page-footnote">
+                {p.id === "free"
+                  ? "Sin tarjeta • Acceso inmediato"
+                  : "Cancelás cuando quieras"}
+              </p>
             </div>
           </article>
         ))}
