@@ -1,0 +1,722 @@
+/* =========================================================
+   ACCOUNT PAGE
+========================================================= */
+
+.account-loading {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+.account-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(124, 92, 255, 0.2);
+  border-top-color: #7c5cff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Layout ── */
+.account-page {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  padding-top: 52px;
+}
+
+@media (min-width: 1024px) {
+  .account-page { padding-top: 56px; }
+}
+
+/* ── Sidebar ── */
+.account-sidebar {
+  position: sticky;
+  top: 52px;
+  height: calc(100vh - 52px);
+  overflow-y: auto;
+  background: rgba(11, 11, 15, 0.7);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (min-width: 1024px) {
+  .account-sidebar { top: 56px; height: calc(100vh - 56px); }
+}
+
+.account-back {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all 160ms ease;
+  margin-bottom: 8px;
+}
+
+.account-back:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+  transform: translateX(-2px);
+}
+
+/* Avatar block */
+.account-avatar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.account-avatar {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7c5cff, #5a3ee0);
+  display: grid;
+  place-items: center;
+  font-size: 17px;
+  font-weight: 900;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(124, 92, 255, 0.35);
+}
+
+.account-avatar-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-avatar-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-avatar-plan {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Nav items */
+.account-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.account-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all 160ms ease;
+}
+
+.account-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.account-nav-item.active {
+  background: rgba(124, 92, 255, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(124, 92, 255, 0.2);
+}
+
+.account-nav-icon {
+  font-size: 15px;
+  opacity: 0.8;
+}
+
+.account-logout-btn {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 70, 70, 0.07);
+  border: 1px solid rgba(255, 70, 70, 0.15);
+  color: rgba(255, 100, 100, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 160ms ease;
+  text-align: left;
+}
+
+.account-logout-btn:hover {
+  background: rgba(255, 70, 70, 0.13);
+  color: #ff7070;
+}
+
+/* ── Main content ── */
+.account-main {
+  padding: 32px 28px;
+  max-width: 760px;
+}
+
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: sectionIn 200ms ease-out;
+}
+
+@keyframes sectionIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.account-section-title {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+/* ── Cards ── */
+.acc-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.acc-card--plan {
+  border-color: rgba(124, 92, 255, 0.2);
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+.acc-card--danger {
+  border-color: rgba(255, 70, 70, 0.15);
+  background: linear-gradient(135deg, rgba(255, 50, 50, 0.04), rgba(255, 255, 255, 0.02));
+}
+
+.acc-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.acc-card-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.acc-card-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
+  flex: 1;
+}
+
+/* ── Field rows ── */
+.acc-field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.acc-field-row:last-of-type {
+  border-bottom: none;
+}
+
+.acc-field-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+}
+
+.acc-field-value {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+}
+
+.acc-field-value--highlight {
+  color: #a78bfa;
+}
+
+.acc-payment-method {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acc-card-chip {
+  font-size: 14px;
+}
+
+/* ── Plan badge ── */
+.acc-plan-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* ── Status chips ── */
+.acc-status-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.3px;
+}
+
+.acc-status-chip--active {
+  background: rgba(80, 200, 120, 0.12);
+  color: #6ee7a0;
+  border: 1px solid rgba(80, 200, 120, 0.25);
+}
+
+/* ── Usage bar ── */
+.acc-usage-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.acc-usage-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.acc-usage-count strong {
+  color: #a78bfa;
+}
+
+.acc-progress-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.acc-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #7c5cff, #a78bfa);
+  border-radius: 999px;
+  transition: width 600ms ease;
+}
+
+.acc-progress-bar.warning {
+  background: linear-gradient(90deg, #f0a500, #ffc947);
+}
+
+.acc-progress-bar.danger {
+  background: linear-gradient(90deg, #ff4444, #ff7070);
+}
+
+.acc-usage-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Stats grid ── */
+.acc-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.acc-stat {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.acc-stat-val {
+  font-size: 22px;
+  font-weight: 900;
+  color: #a78bfa;
+}
+
+.acc-stat-lbl {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+/* ── Upgrade prompt ── */
+.acc-upgrade-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.acc-upgrade-prompt p {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Danger perks ── */
+.acc-danger-perks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.acc-perk-lost {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 70, 70, 0.08);
+  color: rgba(255, 100, 100, 0.8);
+  border: 1px solid rgba(255, 70, 70, 0.15);
+}
+
+/* ── Payment list ── */
+.acc-payment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.acc-payment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+}
+
+.acc-payment-item:last-child { border-bottom: none; }
+
+.acc-payment-date {
+  color: rgba(255, 255, 255, 0.5);
+  min-width: 110px;
+}
+
+.acc-payment-desc {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.acc-payment-amount {
+  font-weight: 700;
+  color: #a78bfa;
+}
+
+/* ── Session ── */
+.acc-session-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.acc-session-icon {
+  font-size: 22px;
+}
+
+.acc-session-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.acc-session-device {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+/* ── Buttons ── */
+.acc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.acc-btn--primary {
+  background: linear-gradient(135deg, #7c5cff, #5a3ee0);
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(124, 92, 255, 0.25);
+}
+
+.acc-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 26px rgba(124, 92, 255, 0.35);
+}
+
+.acc-btn--ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.acc-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.acc-btn--danger {
+  background: rgba(255, 70, 70, 0.12);
+  color: #ff7070;
+  border: 1px solid rgba(255, 70, 70, 0.2);
+}
+
+.acc-btn--danger:hover {
+  background: rgba(255, 70, 70, 0.2);
+}
+
+.acc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* ── Form ── */
+.acc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.acc-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.acc-input {
+  background: rgba(11, 11, 15, 0.8);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+  font-family: inherit;
+}
+
+.acc-input:focus {
+  border-color: rgba(124, 92, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.12);
+}
+
+.acc-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+select.acc-input option {
+  background: #0b0b0f;
+}
+
+/* ── Alerts ── */
+.acc-alert {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.acc-alert--error {
+  background: rgba(255, 70, 70, 0.1);
+  border: 1px solid rgba(255, 70, 70, 0.25);
+  color: #ff9090;
+}
+
+.acc-alert--success {
+  background: rgba(80, 200, 120, 0.1);
+  border: 1px solid rgba(80, 200, 120, 0.25);
+  color: #6ee7a0;
+}
+
+.acc-muted {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.6;
+}
+
+/* ── Modals ── */
+.acc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.acc-modal {
+  width: min(480px, 92vw);
+  background: linear-gradient(180deg, rgba(30, 28, 40, 0.98), rgba(20, 18, 30, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  animation: modalIn 180ms ease-out;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.acc-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  transition: all 160ms ease;
+}
+
+.acc-modal-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.acc-modal-icon {
+  font-size: 36px;
+  text-align: center;
+}
+
+.acc-modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.acc-modal-desc {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.65);
+  text-align: center;
+  line-height: 1.6;
+}
+
+.acc-modal-perks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.acc-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.acc-modal-actions .acc-btn {
+  flex: 1;
+}
+
+/* ── Mobile ── */
+@media (max-width: 767px) {
+  .account-page {
+    grid-template-columns: 1fr;
+  }
+
+  .account-sidebar {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 14px 16px;
+    gap: 8px;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .account-back {
+    margin-bottom: 0;
+  }
+
+  .account-avatar-wrap {
+    display: none;
+  }
+
+  .account-nav {
+    flex-direction: row;
+    flex: unset;
+  }
+
+  .account-logout-btn {
+    margin-top: 0;
+  }
+
+  .account-main {
+    padding: 20px 16px;
+  }
+
+  .acc-stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

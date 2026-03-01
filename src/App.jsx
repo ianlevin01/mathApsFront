@@ -14,6 +14,7 @@ import TermsOfService from "./components/TermsOfService";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import Flashcards from "./components/Flashcards";
 import DevQuestions from "./components/DevQuestions"; // ← NUEVO
+import AccountPage from "./components/AccountPage";
 import PlansPage from "./components/PlansPage";
 import { getToken, removeToken } from "./auth.js";
 import { normalizeMath } from "./utils/mathUtils";
@@ -211,6 +212,8 @@ export default function App() {
             element={isAuthenticated ? <PlansPage /> : <Navigate to="/" replace />}
           />
 
+          <Route path="/account" element={isAuthenticated ? <AccountPage onLogout={handleLogout} /> : <Navigate to="/" replace />} />
+
           {/* 404 */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
@@ -362,7 +365,7 @@ function CalculatorDemo() {
       const formData = new FormData();
       formData.append("problem", problemText);
       if (imageFile) formData.append("image", imageFile);
-      const res = await fetch("https://api.mathaps.online/math/guest", { method: "POST", body: formData });
+      const res = await fetch("http://localhost:3000/math/guest", { method: "POST", body: formData });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data = await res.json();
       setAnswerText(data?.answerText || "");
