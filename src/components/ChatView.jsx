@@ -261,6 +261,11 @@ export default function ChatView() {
       });
     }
     await loadFolders();
+    if (window.fbq) {
+      window.fbq('trackCustom', 'StudyAction', {
+        action_type: 'create_folder'
+      });
+    }
     setNudgeSuggestion(null);
     setNudgeDismissed(true);
   }
@@ -333,6 +338,13 @@ export default function ChatView() {
   async function handleSolve() {
     if (!problemText.trim()) return;
 
+    if (window.fbq) {
+    window.fbq('trackCustom', 'StudyAction', {
+      action_type: 'chat_message'
+    });
+  }
+  
+    
     const isFirst = isFirstMessage.current;
     if (isFirst) {
       isFirstMessage.current = false;
