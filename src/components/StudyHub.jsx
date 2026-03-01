@@ -17,6 +17,14 @@ const FOLDER_SUGGESTIONS = [
   "Física matemática",
 ];
 
+function trackStudyAction(actionType) {
+  if (window.fbq) {
+    window.fbq("trackCustom", "StudyAction", {
+      action_type: actionType,
+    });
+  }
+}
+
 // ── Animated Progress Ring ──────────────────────────────────────────────────
 // Arranca en 0 y anima hasta `target` cuando el componente monta
 // o cuando `target` cambia (viene del fetch de /progress)
@@ -397,9 +405,14 @@ export default function StudyHub() {
           mode={pickFolderMode}
           folders={folders}
           onPick={(folderId) => {
-            navigate(`/folder/${folderId}/${pickFolderMode}`);
-            setPickFolderMode(null);
-          }}
+          trackStudyAction(
+            pickFolderMode === "flashcards"
+              ? "flashcards"
+              : "dev_questions"
+          );
+          navigate(`/folder/${folderId}/${pickFolderMode}`);
+          setPickFolderMode(null);
+        }}
           onClose={() => setPickFolderMode(null)}
         />
       )}
@@ -427,7 +440,7 @@ export default function StudyHub() {
           <span className="study-tool-card__arrow">→</span>
         </div>
 
-        <div className="study-tool-card study-tool-card--flash" onClick={() => setPickFolderMode("flashcards")}>
+        <div className="study-tool-card study-tool-card--flash" onClick={() => {trackStudyAction("flashcards"); setPickFolderMode("flashcards"); }}>
           <div className="study-tool-card__glow" />
           <div className="study-tool-card__icon-wrap">
             <span className="study-tool-card__icon">🧠</span>
@@ -439,7 +452,7 @@ export default function StudyHub() {
           <span className="study-tool-card__arrow">→</span>
         </div>
 
-        <div className="study-tool-card study-tool-card--dev" onClick={() => setPickFolderMode("dev-questions")}>
+        <div className="study-tool-card study-tool-card--dev" onClick={() => {trackStudyAction("dev_questions");setPickFolderMode("dev-questions");}}>
           <div className="study-tool-card__glow" />
           <div className="study-tool-card__icon-wrap">
             <span className="study-tool-card__icon">✍️</span>
@@ -626,14 +639,22 @@ function FoldersView({
                   <button
                     className="folder-tool-btn folder-tool-btn--flash"
                     title="Flashcards"
-                    onClick={(e) => { e.stopPropagation(); navigate(`/folder/${folder.id}/flashcards`); }}
+                    onClick={(e) => { 
+                      e.stopPropagation();
+                      trackStudyAction("flashcards");
+                      navigate(`/folder/${folder.id}/flashcards`);
+                    }}
                   >
                     🧠
                   </button>
                   <button
                     className="folder-tool-btn folder-tool-btn--dev"
                     title="Preguntas a desarrollo"
-                    onClick={(e) => { e.stopPropagation(); navigate(`/folder/${folder.id}/dev-questions`); }}
+                    onClick={(e) => { 
+                      e.stopPropagation();
+                      trackStudyAction("dev_questions");
+                      navigate(`/folder/${folder.id}/dev-questions`);
+                    }}
                   >
                     ✍️
                   </button>
@@ -651,10 +672,10 @@ function FoldersView({
               <button className="btn-add-chat" onClick={() => setShowAddChat(!showAddChat)}>
                 + Agregar chat
               </button>
-              <button className="btn-flashcards" onClick={() => navigate(`/folder/${selectedFolder}/flashcards`)}>
+              <button className="btn-flashcards" onClick={() => {trackStudyAction("flashcards");navigate(`/folder/${selectedFolder}/flashcards`);}}>
                 🧠 Flashcards
               </button>
-              <button className="btn-dev-questions" onClick={() => navigate(`/folder/${selectedFolder}/dev-questions`)}>
+              <button className="btn-dev-questions" onClick={() => {trackStudyAction("dev_questions");navigate(`/folder/${selectedFolder}/dev-questions`);}}>
                 ✍️ Desarrollo
               </button>
               <button className="btn-exam" onClick={() => generateExam(selectedFolder)}>
