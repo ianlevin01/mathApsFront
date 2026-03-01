@@ -1,20 +1,29 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Favicon principal (Google usa este) -->
-  <link rel="icon" href="/favicon.png" />
+    <!-- Favicon — Google toma el primero que encuentre -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/favicon.png" />
 
-  <!-- Título -->
-  <title>MathAPS</title>
+    <!-- SEO básico -->
+    <title>MathAPS</title>
+    <meta name="description" content="MathAPS (Math Advanced Problem Solver) te ayuda a resolver problemas matemáticos, visualizar funciones y estudiar más rápido con explicaciones claras." />
 
-  <!-- Google Identity -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Open Graph (para redes y previews) -->
+    <meta property="og:title" content="MathAPS" />
+    <meta property="og:description" content="Resolvé problemas matemáticos paso a paso con IA." />
+    <meta property="og:image" content="https://www.mathaps.com/favicon.png" />
+    <meta property="og:url" content="https://www.mathaps.com" />
+    <meta property="og:type" content="website" />
 
-</head>
-
+    <!-- Google Identity -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
