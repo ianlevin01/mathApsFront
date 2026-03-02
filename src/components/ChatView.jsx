@@ -138,6 +138,8 @@ export default function ChatView() {
   const [folders, setFolders] = useState([]);
 
   const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const chatMessagesRef = useRef(null);
 
   // Model state
   const [availableModels, setAvailableModels] = useState([]);
@@ -170,7 +172,11 @@ export default function ChatView() {
     setImagePreview(url);
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
-
+  useEffect(() => {
+  if (messagesEndRef.current) {
+    messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+  }
+  }, [messages]);
   function handleRemoveImage() {
     setImageFile(null);
     setImagePreview(null);
@@ -317,6 +323,11 @@ export default function ChatView() {
         return msg;
       });
       setMessages(processed);
+      setTimeout(() => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "instant" });
+        }
+      }, 50);
     } catch (err) {
       console.error(err);
     }
@@ -507,7 +518,7 @@ export default function ChatView() {
 
       {/* Main */}
       <div className="chat-main">
-        <div className="chat-messages">
+        <div className="chat-messages" ref={chatMessagesRef}>
           {messages.length === 0 && (
             <div className="chat-empty">
               <h2>¡Empezá una conversación!</h2>
@@ -555,6 +566,7 @@ export default function ChatView() {
               onDismiss={() => { setNudgeSuggestion(null); setNudgeDismissed(true); }}
             />
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Folder popup manual */}

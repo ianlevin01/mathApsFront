@@ -69,6 +69,8 @@ export default function FolderChatView() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const chatMessagesRef = useRef(null);
 
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("mth-mini");
@@ -87,7 +89,11 @@ export default function FolderChatView() {
     setImagePreview(url);
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
-
+  useEffect(() => {
+  if (messagesEndRef.current) {
+    messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+  }
+  }, [messages]);
   async function loadModels() {
     try {
       const token = getToken?.() || "";
@@ -165,6 +171,11 @@ export default function FolderChatView() {
         return msg;
       });
       setMessages(processedMessages);
+      setTimeout(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: "instant" });
+        }
+      }, 50);
     } catch (err) {
       console.error(err);
     }
@@ -360,7 +371,7 @@ export default function FolderChatView() {
 
       {/* Main chat area */}
       <div className="chat-main">
-        <div className="chat-messages">
+        <div className="chat-messages" ref={chatMessagesRef}>
           {messages.length === 0 && (
             <div className="chat-empty">
               <h2>¡Empezá una conversación!</h2>
@@ -397,6 +408,7 @@ export default function FolderChatView() {
               </div>
             );
           })}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Input area */}
