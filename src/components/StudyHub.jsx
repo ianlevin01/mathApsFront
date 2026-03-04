@@ -19,25 +19,18 @@ const FOLDER_SUGGESTIONS = [
 
 function trackStudyAction(actionType) {
   if (window.fbq) {
-    window.fbq("trackCustom", "StudyAction", {
-      action_type: actionType,
-    });
+    window.fbq("trackCustom", "StudyAction", { action_type: actionType });
   }
 }
 
 // ── Animated Progress Ring ──────────────────────────────────────────────────
-// Arranca en 0 y anima hasta `target` cuando el componente monta
-// o cuando `target` cambia (viene del fetch de /progress)
 function ProgressRing({ target }) {
   const RADIUS = 20;
-  const CIRCUMFERENCE = 2 * Math.PI * RADIUS; // 125.66
-
-  // Arrancamos con 0 para que la animación se vea desde el principio
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
   const [displayed, setDisplayed] = useState(0);
 
   useEffect(() => {
     if (target == null) return;
-    // Pequeño delay para que la card termine de entrar antes de animar el ring
     const t = setTimeout(() => setDisplayed(target), 120);
     return () => clearTimeout(t);
   }, [target]);
@@ -55,7 +48,6 @@ function ProgressRing({ target }) {
           r={RADIUS}
           style={{
             strokeDasharray: `${dash} ${CIRCUMFERENCE}`,
-            // transición más larga y con ease-out para efecto de "llegar"
             transition: "stroke-dasharray 900ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         />
@@ -231,14 +223,21 @@ export default function StudyHub() {
   const [pickFolderMode, setPickFolderMode] = useState(null);
   // folderId → percentage (null = todavía cargando)
   const [folderProgress, setFolderProgress] = useState({});
+  // folderId → number of chats
+  const [folderChatCounts, setFolderChatCounts] = useState({});
+  // Set de chatIds que ya están en alguna carpeta
+  const [organizedChatIds, setOrganizedChatIds] = useState(new Set());
+  // folderId → { flashcards: [], devQuestions: [] } para ProgressView
+  const [folderStats, setFolderStats] = useState({});
+  const [selectedProgressFolder, setSelectedProgressFolder] = useState(null);
+  const [loadingProgressFolder, setLoadingProgressFolder] = useState(false);
 
   useEffect(() => {
     loadFolders();
     loadAllChats();
   }, []);
 
-  // Cuando llegan las carpetas, pedimos los progress en paralelo
-  // La página ya se muestra con los rings en 0, y cuando llegan los datos animan
+  // ── Cargar progress de todas las carpetas en paralelo ──
   async function loadFolderProgressBatch(folderList) {
     if (!folderList.length) return;
     const token = getToken?.() || "";
@@ -262,6 +261,39 @@ export default function StudyHub() {
     setFolderProgress(progressMap);
   }
 
+  // ── Cargar chat count + IDs de todas las carpetas en paralelo ──
+  async function loadFolderChatCountsBatch(folderList) {
+    if (!folderList.length) return;
+    const token = getToken?.() || "";
+
+    const results = await Promise.allSettled(
+      folderList.map((folder) =>
+        fetch(`${API_BASE}/folder/${folder.id}/chats`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).then((r) => (r.ok ? r.json() : []))
+      )
+    );
+
+    const countMap = {};
+    const allOrganizedIds = new Set();
+
+    folderList.forEach((folder, i) => {
+      const result = results[i];
+      const chats =
+        result.status === "fulfilled" && Array.isArray(result.value)
+          ? result.value
+          : [];
+      countMap[folder.id] = chats.length;
+      chats.forEach((chat) => {
+        const id = chat.chatId || chat.id;
+        if (id) allOrganizedIds.add(id);
+      });
+    });
+
+    setFolderChatCounts(countMap);
+    setOrganizedChatIds(allOrganizedIds);
+  }
+
   async function loadFolders() {
     try {
       const token = getToken?.() || "";
@@ -271,19 +303,16 @@ export default function StudyHub() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       const processed = Array.isArray(data)
-        ? data.map((folder) => {
-            const chatsArr = Object.values(folder).find((v) => Array.isArray(v));
-            return {
-              id: folder.folderId || folder.id,
-              name: folder.name,
-              chatCount: chatsArr ? chatsArr.length : 0,
-              createdAt: folder.createdAt,
-            };
-          })
+        ? data.map((folder) => ({
+            id: folder.folderId || folder.id,
+            name: folder.name,
+            chatCount: 0, // se actualiza con loadFolderChatCountsBatch
+            createdAt: folder.createdAt,
+          }))
         : [];
       setFolders(processed);
-      // Disparar la carga de progress después de que las cards ya se renderizan
       loadFolderProgressBatch(processed);
+      loadFolderChatCountsBatch(processed);
     } catch {
       setFolders([]);
     }
@@ -334,8 +363,11 @@ export default function StudyHub() {
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setFolderChats(Array.isArray(data) ? data : []);
+      const chats = Array.isArray(data) ? data : [];
+      setFolderChats(chats);
       setSelectedFolder(folderId);
+      // Actualizar el count de esa carpeta con el dato real
+      setFolderChatCounts((prev) => ({ ...prev, [folderId]: chats.length }));
     } catch {
       setFolderChats([]);
     } finally {
@@ -351,7 +383,10 @@ export default function StudyHub() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (selectedFolder) loadFolderChats(selectedFolder);
-      loadFolders();
+      // Recargar counts e IDs organizados después de asignar
+      loadFolderChatCountsBatch(folders);
+      // Actualizar organizedChatIds inmediatamente sin esperar el batch
+      setOrganizedChatIds((prev) => new Set([...prev, chatId]));
       setQuickAssignChat(null);
     } catch (err) {
       console.error(err);
@@ -378,9 +413,54 @@ export default function StudyHub() {
     }
   }
 
+  // ── Cargar stats de una carpeta para ProgressView ──
+  async function loadFolderStatsForProgress(folderId) {
+    if (folderStats[folderId]) {
+      setSelectedProgressFolder(folderId);
+      return;
+    }
+    setLoadingProgressFolder(true);
+    setSelectedProgressFolder(folderId);
+    try {
+      const token = getToken?.() || "";
+      const [flashRes, devRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/folder/${folderId}/flashcards`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).then((r) => (r.ok ? r.json() : [])),
+        fetch(`${API_BASE}/folder/${folderId}/dev-questions`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }).then((r) => (r.ok ? r.json() : [])),
+      ]);
+
+      setFolderStats((prev) => ({
+        ...prev,
+        [folderId]: {
+          flashcards: flashRes.status === "fulfilled" && Array.isArray(flashRes.value) ? flashRes.value : [],
+          devQuestions: devRes.status === "fulfilled" && Array.isArray(devRes.value) ? devRes.value : [],
+        },
+      }));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingProgressFolder(false);
+    }
+  }
+
+  // Conteo total de chats organizados (suma de todos los counts por carpeta)
+  const totalOrganizedChats = Object.values(folderChatCounts).reduce((s, c) => s + c, 0);
+
+  // Chats realmente sin organizar: los que no están en ninguna carpeta
+  // organizedChatIds se llena en loadFolderChatCountsBatch con los IDs reales
   const unorganizedChats = allChats.filter(
-    (chat) => !folderChats.some((fc) => (fc.chatId || fc.id) === (chat.chatId || chat.id))
+    (chat) => !organizedChatIds.has(chat.chatId || chat.id)
   );
+  const unorganizedCount = unorganizedChats.length;
+
+  // Folders con chatCount actualizado desde folderChatCounts
+  const foldersWithCounts = folders.map((f) => ({
+    ...f,
+    chatCount: folderChatCounts[f.id] ?? 0,
+  }));
 
   return (
     <div className="study-hub">
@@ -394,7 +474,7 @@ export default function StudyHub() {
       {quickAssignChat && (
         <QuickAssignModal
           chat={allChats.find((c) => (c.chatId || c.id) === quickAssignChat)}
-          folders={folders}
+          folders={foldersWithCounts}
           onAssign={(folderId) => assignChatToFolder(quickAssignChat, folderId)}
           onClose={() => setQuickAssignChat(null)}
         />
@@ -403,16 +483,12 @@ export default function StudyHub() {
       {pickFolderMode && (
         <PickFolderModal
           mode={pickFolderMode}
-          folders={folders}
+          folders={foldersWithCounts}
           onPick={(folderId) => {
-          trackStudyAction(
-            pickFolderMode === "flashcards"
-              ? "flashcards"
-              : "dev_questions"
-          );
-          navigate(`/folder/${folderId}/${pickFolderMode}`);
-          setPickFolderMode(null);
-        }}
+            trackStudyAction(pickFolderMode === "flashcards" ? "flashcards" : "dev_questions");
+            navigate(`/folder/${folderId}/${pickFolderMode}`);
+            setPickFolderMode(null);
+          }}
           onClose={() => setPickFolderMode(null)}
         />
       )}
@@ -440,7 +516,7 @@ export default function StudyHub() {
           <span className="study-tool-card__arrow">→</span>
         </div>
 
-        <div className="study-tool-card study-tool-card--flash" onClick={() => {trackStudyAction("flashcards"); setPickFolderMode("flashcards"); }}>
+        <div className="study-tool-card study-tool-card--flash" onClick={() => { trackStudyAction("flashcards"); setPickFolderMode("flashcards"); }}>
           <div className="study-tool-card__glow" />
           <div className="study-tool-card__icon-wrap">
             <span className="study-tool-card__icon">🧠</span>
@@ -452,7 +528,7 @@ export default function StudyHub() {
           <span className="study-tool-card__arrow">→</span>
         </div>
 
-        <div className="study-tool-card study-tool-card--dev" onClick={() => {trackStudyAction("dev_questions");setPickFolderMode("dev-questions");}}>
+        <div className="study-tool-card study-tool-card--dev" onClick={() => { trackStudyAction("dev_questions"); setPickFolderMode("dev-questions"); }}>
           <div className="study-tool-card__glow" />
           <div className="study-tool-card__icon-wrap">
             <span className="study-tool-card__icon">✍️</span>
@@ -478,12 +554,12 @@ export default function StudyHub() {
         </div>
         <div className="study-stat-divider" />
         <div className="study-stat">
-          <span className="study-stat__value">{folders.reduce((s, f) => s + (f.chatCount || 0), 0)}</span>
+          <span className="study-stat__value">{totalOrganizedChats}</span>
           <span className="study-stat__label">Chats organizados</span>
         </div>
         <div className="study-stat-divider" />
         <div className="study-stat">
-          <span className="study-stat__value">{unorganizedChats.length}</span>
+          <span className="study-stat__value">{unorganizedCount}</span>
           <span className="study-stat__label">Sin organizar</span>
         </div>
       </div>
@@ -508,7 +584,7 @@ export default function StudyHub() {
         {view === "folders" && (
           <FoldersView
             navigate={navigate}
-            folders={folders}
+            folders={foldersWithCounts}
             folderProgress={folderProgress}
             selectedFolder={selectedFolder}
             folderChats={folderChats}
@@ -525,7 +601,18 @@ export default function StudyHub() {
             generateExam={generateExam}
           />
         )}
-        {view === "progress" && <ProgressView folders={folders} allChats={allChats} />}
+        {view === "progress" && (
+          <ProgressView
+            folders={foldersWithCounts}
+            allChats={allChats}
+            totalOrganizedChats={totalOrganizedChats}
+            folderProgress={folderProgress}
+            folderStats={folderStats}
+            selectedProgressFolder={selectedProgressFolder}
+            loadingProgressFolder={loadingProgressFolder}
+            onSelectFolder={loadFolderStatsForProgress}
+          />
+        )}
       </div>
 
       {/* Upgrade Banner */}
@@ -616,7 +703,6 @@ function FoldersView({
         {Array.isArray(folders) &&
           folders.map((folder, i) => {
             if (!folder || !folder.id) return null;
-            // null = todavía no llegó la respuesta → ProgressRing muestra "…" y ring en 0
             const progress = folderProgress[folder.id] ?? null;
 
             return (
@@ -627,19 +713,16 @@ function FoldersView({
                 onClick={() => navigate(`/folder/${folder.id}`)}
               >
                 <div className="folder-card__bg" />
-
-                {/* Ring animado */}
                 <ProgressRing target={progress} />
-
                 <div className="folder-icon">📁</div>
                 <div className="folder-name">{folder.name || "Sin nombre"}</div>
-                <div className="folder-count">{folder.chatCount || 0} chats</div>
+                <div className="folder-count">{folder.chatCount} chats</div>
 
                 <div className="folder-card-tools" onClick={(e) => e.stopPropagation()}>
                   <button
                     className="folder-tool-btn folder-tool-btn--flash"
                     title="Flashcards"
-                    onClick={(e) => { 
+                    onClick={(e) => {
                       e.stopPropagation();
                       trackStudyAction("flashcards");
                       navigate(`/folder/${folder.id}/flashcards`);
@@ -650,7 +733,7 @@ function FoldersView({
                   <button
                     className="folder-tool-btn folder-tool-btn--dev"
                     title="Preguntas a desarrollo"
-                    onClick={(e) => { 
+                    onClick={(e) => {
                       e.stopPropagation();
                       trackStudyAction("dev_questions");
                       navigate(`/folder/${folder.id}/dev-questions`);
@@ -672,10 +755,10 @@ function FoldersView({
               <button className="btn-add-chat" onClick={() => setShowAddChat(!showAddChat)}>
                 + Agregar chat
               </button>
-              <button className="btn-flashcards" onClick={() => {trackStudyAction("flashcards");navigate(`/folder/${selectedFolder}/flashcards`);}}>
+              <button className="btn-flashcards" onClick={() => { trackStudyAction("flashcards"); navigate(`/folder/${selectedFolder}/flashcards`); }}>
                 🧠 Flashcards
               </button>
-              <button className="btn-dev-questions" onClick={() => {trackStudyAction("dev_questions");navigate(`/folder/${selectedFolder}/dev-questions`);}}>
+              <button className="btn-dev-questions" onClick={() => { trackStudyAction("dev_questions"); navigate(`/folder/${selectedFolder}/dev-questions`); }}>
                 ✍️ Desarrollo
               </button>
               <button className="btn-exam" onClick={() => generateExam(selectedFolder)}>
@@ -744,11 +827,49 @@ function FoldersView({
   );
 }
 
-function ProgressView({ folders, allChats }) {
+// ── Progress View ───────────────────────────────────────────────────────────
+function ProgressView({
+  folders,
+  allChats,
+  totalOrganizedChats,
+  folderProgress,
+  folderStats,
+  selectedProgressFolder,
+  loadingProgressFolder,
+  onSelectFolder,
+}) {
+  const stats = selectedProgressFolder ? folderStats[selectedProgressFolder] : null;
+
+  // Calcular stats de dev-questions (backend ya solo devuelve respondidas)
+  function calcDevStats(devQuestions) {
+    if (!devQuestions || devQuestions.length === 0) return { count: 0, avgScore: null };
+    const avgScore =
+      devQuestions.length > 0
+        ? Math.round((devQuestions.reduce((s, q) => s + (q.score || 0), 0) / devQuestions.length) * 10) / 10
+        : null;
+    return { count: devQuestions.length, avgScore };
+  }
+
+  const devStats = stats ? calcDevStats(stats.devQuestions) : null;
+  const flashCount = stats ? stats.flashcards.length : null;
+  const lastFlashcards = stats ? [...stats.flashcards].reverse().slice(0, 5) : [];
+  const lastDevQuestions = stats ? [...stats.devQuestions].reverse().slice(0, 5) : [];
+
+  // Puntaje promedio de dev como % para la barra (escala 0-10)
+  const devScorePercent = devStats?.avgScore != null ? (devStats.avgScore / 10) * 100 : 0;
+
+  // Color de puntaje
+  function scoreColor(score) {
+    if (score == null) return "rgba(255,255,255,0.3)";
+    if (score >= 7) return "#22c55e";
+    if (score >= 5) return "#f97316";
+    return "#ef4444";
+  }
+
   return (
     <div className="progress-view">
-      <h2>Tu Progreso</h2>
-      <div className="progress-stats">
+      {/* Resumen global */}
+      <div className="progress-global">
         <div className="progress-stat-card">
           <div className="progress-stat-value">{allChats.length}</div>
           <div className="progress-stat-label">Chats totales</div>
@@ -758,14 +879,167 @@ function ProgressView({ folders, allChats }) {
           <div className="progress-stat-label">Carpetas</div>
         </div>
         <div className="progress-stat-card">
-          <div className="progress-stat-value">{folders.reduce((s, f) => s + (f.chatCount || 0), 0)}</div>
+          <div className="progress-stat-value">{totalOrganizedChats}</div>
           <div className="progress-stat-label">Chats organizados</div>
         </div>
       </div>
-      <div className="progress-chart">
-        <h3>Actividad reciente</h3>
-        <p className="empty-state">Próximamente: gráficos de progreso</p>
+
+      {/* Progreso por carpeta — lista */}
+      <div className="progress-folders-section">
+        <h3 className="progress-section-title">Progreso por carpeta</h3>
+        {folders.length === 0 && (
+          <p className="empty-state">Todavía no tenés carpetas.</p>
+        )}
+        <div className="progress-folder-list">
+          {folders.map((folder) => {
+            const pct = folderProgress[folder.id] ?? null;
+            const isSelected = selectedProgressFolder === folder.id;
+            return (
+              <div
+                key={folder.id}
+                className={`progress-folder-row ${isSelected ? "progress-folder-row--active" : ""}`}
+                onClick={() => onSelectFolder(folder.id)}
+              >
+                <div className="progress-folder-row__left">
+                  <span className="progress-folder-row__icon">📁</span>
+                  <div className="progress-folder-row__info">
+                    <span className="progress-folder-row__name">{folder.name}</span>
+                    <span className="progress-folder-row__count">{folder.chatCount} chats</span>
+                  </div>
+                </div>
+                <div className="progress-folder-row__right">
+                  <div className="progress-bar-wrap">
+                    <div
+                      className="progress-bar-fill"
+                      style={{
+                        width: pct != null ? `${pct}%` : "0%",
+                        transition: "width 900ms cubic-bezier(0.22,1,0.36,1)",
+                      }}
+                    />
+                  </div>
+                  <span className="progress-folder-row__pct">
+                    {pct != null ? `${pct}%` : "…"}
+                  </span>
+                  <span className="progress-folder-row__arrow">{isSelected ? "▾" : "›"}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Detalle de carpeta seleccionada */}
+      {selectedProgressFolder && (
+        <div className="progress-folder-detail">
+          {loadingProgressFolder ? (
+            <div className="progress-detail-loading">Cargando estadísticas…</div>
+          ) : stats ? (
+            <>
+              <h3 className="progress-section-title">
+                {folders.find((f) => f.id === selectedProgressFolder)?.name || "Carpeta"}
+              </h3>
+
+              <div className="progress-detail-grid">
+                {/* Flashcards card */}
+                <div className="progress-detail-card progress-detail-card--flash">
+                  <div className="progress-detail-card__header">
+                    <span className="progress-detail-card__icon">🧠</span>
+                    <span className="progress-detail-card__title">Flashcards</span>
+                  </div>
+                  {flashCount === 0 ? (
+                    <p className="progress-detail-card__empty">Todavía no respondiste flashcards en esta carpeta.</p>
+                  ) : (
+                    <>
+                      <div className="progress-detail-card__main">
+                        <span className="progress-detail-card__big">{flashCount}</span>
+                        <span className="progress-detail-card__label">respondidas correctamente</span>
+                      </div>
+                      <div className="progress-dev-answers">
+                        <p className="progress-dev-answers__title">Últimas correctas</p>
+                        {lastFlashcards.map((q) => (
+                          <div key={q.SK} className="progress-dev-answer-item">
+                            <div className="progress-dev-answer-item__top">
+                              <span className="progress-dev-answer-item__score" style={{ color: "#f97316" }}>✓</span>
+                              <span className="progress-dev-answer-item__date">
+                                {q.createdAt ? new Date(q.createdAt).toLocaleDateString("es-AR") : ""}
+                              </span>
+                            </div>
+                            <p className="progress-dev-answer-item__question">
+                              {q.question?.replace(/\\[()\[\]]/g, "").slice(0, 90)}…
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Dev questions card */}
+                <div className="progress-detail-card progress-detail-card--dev">
+                  <div className="progress-detail-card__header">
+                    <span className="progress-detail-card__icon">✍️</span>
+                    <span className="progress-detail-card__title">Preguntas a desarrollo</span>
+                  </div>
+                  {devStats.count === 0 ? (
+                    <p className="progress-detail-card__empty">Todavía no hiciste preguntas a desarrollo en esta carpeta.</p>
+                  ) : (
+                    <>
+                      <div className="progress-detail-card__main">
+                        <span className="progress-detail-card__big">{devStats.count}</span>
+                        <span className="progress-detail-card__label">preguntas respondidas</span>
+                      </div>
+                      {devStats.avgScore != null && (
+                        <div className="progress-detail-score">
+                          <div className="progress-detail-score__row">
+                            <span className="progress-detail-score__label">Puntaje promedio</span>
+                            <span
+                              className="progress-detail-score__value"
+                              style={{ color: scoreColor(devStats.avgScore) }}
+                            >
+                              {devStats.avgScore}/10
+                            </span>
+                          </div>
+                          <div className="progress-detail-score__bar-bg">
+                            <div
+                              className="progress-detail-score__bar-fill"
+                              style={{
+                                width: `${devScorePercent}%`,
+                                background: scoreColor(devStats.avgScore),
+                                transition: "width 900ms cubic-bezier(0.22,1,0.36,1)",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="progress-dev-answers">
+                        <p className="progress-dev-answers__title">Últimas respuestas</p>
+                        {lastDevQuestions.map((q) => (
+                          <div key={q.SK} className="progress-dev-answer-item">
+                            <div className="progress-dev-answer-item__top">
+                              <span
+                                className="progress-dev-answer-item__score"
+                                style={{ color: scoreColor(q.score) }}
+                              >
+                                {q.score}/10
+                              </span>
+                              <span className="progress-dev-answer-item__date">
+                                {q.createdAt ? new Date(q.createdAt).toLocaleDateString("es-AR") : ""}
+                              </span>
+                            </div>
+                            <p className="progress-dev-answer-item__question">
+                              {q.question?.replace(/\\[()\[\]]/g, "").slice(0, 90)}…
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
