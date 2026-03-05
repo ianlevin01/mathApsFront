@@ -23,7 +23,7 @@ export default function VerifyEmail() {
     async function verify() {
       try {
         const res = await fetch(
-          `https://api.mathaps.online/auth/verify-email?token=${token}&email=${email}`
+          `http://localhost:3000/auth/verify-email?token=${token}&email=${email}`
         );
 
         const data = await res.json();

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken, getEmailFromToken } from "../auth";
 
-const API_BASE = "https://api.mathaps.online";
+const API_BASE = "http://localhost:3000";
 
 const FOLDER_SUGGESTIONS = [
   "Cálculo diferencial",

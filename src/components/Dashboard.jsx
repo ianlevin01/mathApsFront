@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken, getEmailFromToken } from "../auth";
 
-const API_BASE = "https://api.mathaps.online";
+const API_BASE = "http://localhost:3000";
 
 export default function Dashboard({ onLogout }) {
   const navigate = useNavigate();
