@@ -140,16 +140,12 @@ export default function ChatView() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const chatMessagesRef = useRef(null);
-  // Ref que apunta al último mensaje del usuario para scrollear a él al enviar
   const lastUserMessageRef = useRef(null);
-  // Contador de envíos — incrementar al enviar dispara el useEffect de scroll
   const [sendCount, setSendCount] = useState(0);
 
-  // Model state
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("mth-mini");
 
-  // Nudge state
   const [nudgeSuggestion, setNudgeSuggestion] = useState(null);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const firstMessageRef = useRef(null);
@@ -161,6 +157,7 @@ export default function ChatView() {
     loadModels();
   }, []);
 
+  // ← Al montar, si hay ?id en la URL cargamos ese chat directamente
   useEffect(() => {
     const chatId = searchParams.get("id");
     if (chatId) {
@@ -169,7 +166,6 @@ export default function ChatView() {
     }
   }, [searchParams]);
 
-  // Preview de imagen
   useEffect(() => {
     if (!imageFile) { setImagePreview(null); return; }
     const url = URL.createObjectURL(imageFile);
@@ -177,7 +173,6 @@ export default function ChatView() {
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
-  // Scroll al último mensaje del usuario solo cuando se envía (sendCount cambia)
   useEffect(() => {
     if (sendCount === 0) return;
     lastUserMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -299,6 +294,7 @@ export default function ChatView() {
     }
   }
 
+  // ← Carga un chat y actualiza la URL para que al recargar vuelva al mismo
   async function loadChat(chatId) {
     try {
       const token = getToken?.() || "";
@@ -308,6 +304,10 @@ export default function ChatView() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setCurrentChatId(chatId);
+
+      // ← NUEVO: actualizar la URL sin recargar la página
+      navigate(`/chat?id=${chatId}`, { replace: true });
+
       const processed = (data.messages || []).map((msg) => {
         if (msg.role === "assistant" && typeof msg.content === "string") {
           const m = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
@@ -327,7 +327,6 @@ export default function ChatView() {
         return msg;
       });
       setMessages(processed);
-      // Al cargar un chat existente, ir al final
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
       }, 50);
@@ -373,7 +372,6 @@ export default function ChatView() {
       { role: "assistant", content: "", plotSpec: null, streaming: true },
     ]);
 
-    // Disparar scroll via sendCount — el useEffect corre después del render
     setSendCount((n) => n + 1);
 
     const currentProblem = problemText;
@@ -441,7 +439,12 @@ export default function ChatView() {
             });
 
             if (event.chat?.chatId && !currentChatId) {
-              setCurrentChatId(event.chat.chatId);
+              const newChatId = event.chat.chatId;
+              setCurrentChatId(newChatId);
+
+              // ← NUEVO: actualizar la URL cuando se crea un chat nuevo
+              navigate(`/chat?id=${newChatId}`, { replace: true });
+
               loadChats();
 
               if (isFirst && !nudgeDismissed) {
@@ -467,6 +470,7 @@ export default function ChatView() {
     }
   }
 
+  // ← Al iniciar chat nuevo, limpiar también la URL
   function startNewChat() {
     setCurrentChatId(null);
     setMessages([]);
@@ -477,6 +481,7 @@ export default function ChatView() {
     setNudgeDismissed(false);
     firstMessageRef.current = null;
     isFirstMessage.current = true;
+    navigate("/chat", { replace: true }); // ← NUEVO: limpiar ?id de la URL
   }
 
   return (
@@ -536,7 +541,6 @@ export default function ChatView() {
               : typeof msg.content === "object" ? JSON.stringify(msg.content)
               : String(msg.content || "");
 
-            // El último mensaje de tipo "user" recibe la ref para el scroll al enviar
             const isLastUserMsg =
               msg.role === "user" &&
               idx === [...messages].map((m, i) => m.role === "user" ? i : -1).filter(i => i >= 0).at(-1);
@@ -578,11 +582,10 @@ export default function ChatView() {
               onDismiss={() => { setNudgeSuggestion(null); setNudgeDismissed(true); }}
             />
           )}
-          {/* Spacer dinámico: arranca en 60vh y se reduce a medida que crece la respuesta */}
+
           {isLoading && (() => {
             const streamingMsg = messages[messages.length - 1];
             const chars = (streamingMsg?.streaming && streamingMsg?.content?.length) || 0;
-            // Cada ~300 chars equivale a ~10vh de contenido; se achica hasta 0
             const shrunk = Math.min(chars / 300 * 10, 60);
             const spacerVh = Math.max(60 - shrunk, 0);
             return <div style={{ minHeight: `${spacerVh}vh`, flexShrink: 0, transition: "min-height 0.3s ease" }} />;

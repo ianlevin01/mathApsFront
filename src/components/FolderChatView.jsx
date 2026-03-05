@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Plot from "react-plotly.js";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
@@ -58,6 +58,7 @@ function ModelSelector({ models, selectedKey, onChange }) {
 export default function FolderChatView() {
   const navigate = useNavigate();
   const { folderId } = useParams();
+  const [searchParams] = useSearchParams(); // ← NUEVO
   const [folderName, setFolderName] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chats, setChats] = useState([]);
@@ -71,9 +72,7 @@ export default function FolderChatView() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const chatMessagesRef = useRef(null);
-  // Ref que apunta al último mensaje del usuario para scrollear a él al enviar
   const lastUserMessageRef = useRef(null);
-  // Contador de envíos — incrementar al enviar dispara el useEffect de scroll
   const [sendCount, setSendCount] = useState(0);
 
   const [availableModels, setAvailableModels] = useState([]);
@@ -87,6 +86,14 @@ export default function FolderChatView() {
     loadModels();
   }, [folderId]);
 
+  // ← NUEVO: al montar, si hay ?id en la URL cargamos ese chat directamente
+  useEffect(() => {
+    const chatId = searchParams.get("id");
+    if (chatId) {
+      loadChat(chatId);
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     if (!imageFile) { setImagePreview(null); return; }
     const url = URL.createObjectURL(imageFile);
@@ -94,7 +101,6 @@ export default function FolderChatView() {
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
-  // Scroll al último mensaje del usuario solo cuando se envía (sendCount cambia)
   useEffect(() => {
     if (sendCount === 0) return;
     lastUserMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -149,6 +155,7 @@ export default function FolderChatView() {
     }
   }
 
+  // ← Carga un chat y actualiza la URL para que al recargar vuelva al mismo
   async function loadChat(chatId) {
     try {
       const token = getToken?.() || "";
@@ -158,6 +165,10 @@ export default function FolderChatView() {
       if (!res.ok) throw new Error("Error al cargar chat");
       const data = await res.json();
       setCurrentChatId(chatId);
+
+      // ← NUEVO: actualizar la URL sin recargar la página
+      navigate(`/folder/${folderId}?id=${chatId}`, { replace: true });
+
       const processedMessages = (data.messages || []).map((msg) => {
         if (msg.role === "assistant" && typeof msg.content === "string") {
           const graphMatch = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
@@ -177,7 +188,6 @@ export default function FolderChatView() {
         return msg;
       });
       setMessages(processedMessages);
-      // Al cargar un chat existente, ir al final
       setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
       }, 50);
@@ -218,7 +228,6 @@ export default function FolderChatView() {
       { role: "assistant", content: "", plotSpec: null, streaming: true },
     ]);
 
-    // Disparar scroll via sendCount — el useEffect corre después del render
     setSendCount((n) => n + 1);
 
     const currentProblem = problemText;
@@ -288,6 +297,10 @@ export default function FolderChatView() {
             if (event.chat?.chatId && !currentChatId) {
               const newChatId = event.chat.chatId;
               setCurrentChatId(newChatId);
+
+              // ← NUEVO: actualizar la URL cuando se crea un chat nuevo
+              navigate(`/folder/${folderId}?id=${newChatId}`, { replace: true });
+
               try {
                 await fetch(`${API_BASE}/folder/${folderId}/chats/${newChatId}`, {
                   method: "POST",
@@ -315,12 +328,14 @@ export default function FolderChatView() {
     }
   }
 
+  // ← Al iniciar chat nuevo, limpiar también la URL
   function startNewChat() {
     setCurrentChatId(null);
     setMessages([]);
     setProblemText("");
     setImageFile(null);
     setImagePreview(null);
+    navigate(`/folder/${folderId}`, { replace: true }); // ← NUEVO: limpiar ?id de la URL
   }
 
   return (
@@ -397,7 +412,6 @@ export default function FolderChatView() {
               : typeof msg.content === "object" ? JSON.stringify(msg.content)
               : String(msg.content || "");
 
-            // El último mensaje de tipo "user" recibe la ref para el scroll al enviar
             const isLastUserMsg =
               msg.role === "user" &&
               idx === [...messages].map((m, i) => m.role === "user" ? i : -1).filter(i => i >= 0).at(-1);
@@ -428,11 +442,10 @@ export default function FolderChatView() {
               </div>
             );
           })}
-          {/* Spacer dinámico: arranca en 60vh y se reduce a medida que crece la respuesta */}
+
           {isLoading && (() => {
             const streamingMsg = messages[messages.length - 1];
             const chars = (streamingMsg?.streaming && streamingMsg?.content?.length) || 0;
-            // Cada ~300 chars equivale a ~10vh de contenido; se achica hasta 0
             const shrunk = Math.min(chars / 300 * 10, 60);
             const spacerVh = Math.max(60 - shrunk, 0);
             return <div style={{ minHeight: `${spacerVh}vh`, flexShrink: 0, transition: "min-height 0.3s ease" }} />;
