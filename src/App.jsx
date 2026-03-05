@@ -142,12 +142,17 @@ const STEPS = [
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true); // ← NUEVO
   const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     const token = getToken();
     setIsAuthenticated(!!token);
+    setLoading(false); // ← NUEVO
   }, []);
+
+  // ← NUEVO: mientras verifica el token, no renderiza nada para evitar redirecciones falsas
+  if (loading) return null;
 
   function handleLoginSuccess() {
     setIsAuthenticated(true);
