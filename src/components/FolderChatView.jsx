@@ -71,6 +71,10 @@ export default function FolderChatView() {
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const chatMessagesRef = useRef(null);
+  // Ref que apunta al último mensaje del usuario para scrollear a él al enviar
+  const lastUserMessageRef = useRef(null);
+  // Contador de envíos — incrementar al enviar dispara el useEffect de scroll
+  const [sendCount, setSendCount] = useState(0);
 
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("mth-mini");
@@ -89,11 +93,13 @@ export default function FolderChatView() {
     setImagePreview(url);
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
+
+  // Scroll al último mensaje del usuario solo cuando se envía (sendCount cambia)
   useEffect(() => {
-  if (messagesEndRef.current) {
-    messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-  }
-  }, [messages]);
+    if (sendCount === 0) return;
+    lastUserMessageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [sendCount]);
+
   async function loadModels() {
     try {
       const token = getToken?.() || "";
@@ -171,10 +177,9 @@ export default function FolderChatView() {
         return msg;
       });
       setMessages(processedMessages);
+      // Al cargar un chat existente, ir al final
       setTimeout(() => {
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({ behavior: "instant" });
-        }
+        messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
       }, 50);
     } catch (err) {
       console.error(err);
@@ -212,6 +217,9 @@ export default function FolderChatView() {
       { role: "user", content: problemText, imagePreview: sentPreview },
       { role: "assistant", content: "", plotSpec: null, streaming: true },
     ]);
+
+    // Disparar scroll via sendCount — el useEffect corre después del render
+    setSendCount((n) => n + 1);
 
     const currentProblem = problemText;
     const currentImage = imageFile;
@@ -258,7 +266,11 @@ export default function FolderChatView() {
             accumulatedText += event.text;
             setMessages((prev) => {
               const updated = [...prev];
-              updated[updated.length - 1] = { ...updated[updated.length - 1], content: accumulatedText, streaming: true };
+              updated[updated.length - 1] = {
+                ...updated[updated.length - 1],
+                content: accumulatedText,
+                streaming: true,
+              };
               return updated;
             });
           } else if (event.type === "done") {
@@ -322,7 +334,6 @@ export default function FolderChatView() {
 
         <div className="folder-sidebar-title">📁 {folderName}</div>
 
-        {/* Practice buttons */}
         <div className="folder-practice-btns">
           <button
             className="folder-flashcards-btn"
@@ -386,8 +397,17 @@ export default function FolderChatView() {
               : typeof msg.content === "object" ? JSON.stringify(msg.content)
               : String(msg.content || "");
 
+            // El último mensaje de tipo "user" recibe la ref para el scroll al enviar
+            const isLastUserMsg =
+              msg.role === "user" &&
+              idx === [...messages].map((m, i) => m.role === "user" ? i : -1).filter(i => i >= 0).at(-1);
+
             return (
-              <div key={idx} className={`chat-message chat-message--${msg.role || "user"}`}>
+              <div
+                key={idx}
+                ref={isLastUserMsg ? lastUserMessageRef : null}
+                className={`chat-message chat-message--${msg.role || "user"}`}
+              >
                 {msg.role === "user" && msg.imagePreview && (
                   <div className="message-image-preview">
                     <img src={msg.imagePreview} alt="Imagen adjunta" />
@@ -408,6 +428,15 @@ export default function FolderChatView() {
               </div>
             );
           })}
+          {/* Spacer dinámico: arranca en 60vh y se reduce a medida que crece la respuesta */}
+          {isLoading && (() => {
+            const streamingMsg = messages[messages.length - 1];
+            const chars = (streamingMsg?.streaming && streamingMsg?.content?.length) || 0;
+            // Cada ~300 chars equivale a ~10vh de contenido; se achica hasta 0
+            const shrunk = Math.min(chars / 300 * 10, 60);
+            const spacerVh = Math.max(60 - shrunk, 0);
+            return <div style={{ minHeight: `${spacerVh}vh`, flexShrink: 0, transition: "min-height 0.3s ease" }} />;
+          })()}
           <div ref={messagesEndRef} />
         </div>
 
