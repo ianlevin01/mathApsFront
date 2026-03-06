@@ -208,6 +208,415 @@ function QuickAssignModal({ chat, folders, onAssign, onClose }) {
   );
 }
 
+// ── File Upload Modal ───────────────────────────────────────────────────────
+const MODAL_FILES_PAGE_SIZE = 4;
+
+function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
+  // Upload state
+  const [isDragging, setIsDragging] = useState(false);
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const inputRef = useRef(null);
+
+  // Existing files state
+  const [existingFiles, setExistingFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(MODAL_FILES_PAGE_SIZE);
+  const [deletingId, setDeletingId] = useState(null);
+
+  useEffect(() => { loadExistingFiles(); }, [folderId]);
+
+  async function loadExistingFiles() {
+    setLoadingFiles(true);
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/${folderId}/files`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setExistingFiles(Array.isArray(data) ? data : []);
+    } catch {
+      setExistingFiles([]);
+    } finally {
+      setLoadingFiles(false);
+    }
+  }
+
+  async function deleteFile(fileId) {
+    setDeletingId(fileId);
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/file/${folderId}/${fileId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+      setExistingFiles((prev) => prev.filter((f) => f.fileId !== fileId));
+    } catch (err) {
+      console.error("Error al eliminar archivo", err);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function handleDragOver(e) { e.preventDefault(); setIsDragging(true); }
+  function handleDragLeave(e) { e.preventDefault(); setIsDragging(false); }
+  function handleDrop(e) {
+    e.preventDefault(); setIsDragging(false);
+    const dropped = e.dataTransfer.files[0];
+    if (dropped) setFile(dropped);
+  }
+  function handleFileInput(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
+
+  function getFileIcon(name) {
+    if (!name) return "📄";
+    const ext = name.split(".").pop().toLowerCase();
+    if (ext === "pdf") return "📕";
+    if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) return "🖼️";
+    if (["doc", "docx"].includes(ext)) return "📝";
+    if (["xls", "xlsx"].includes(ext)) return "📊";
+    if (["ppt", "pptx"].includes(ext)) return "📌";
+    if (["zip", "rar", "7z"].includes(ext)) return "🗜️";
+    return "📄";
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  async function handleUpload() {
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const token = getToken?.() || "";
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`${API_BASE}/folder/${folderId}/files`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) throw new Error("Error al subir el archivo");
+      const data = await res.json();
+      setSuccess(true);
+      // Add to existing list immediately
+      setExistingFiles((prev) => [{ fileId: data.fileId, name: file.name, folderId }, ...prev]);
+      setTimeout(() => {
+        onUploaded(data.fileId);
+        setFile(null);
+        setSuccess(false);
+        setError(null);
+      }, 1200);
+    } catch (err) {
+      setError(err.message || "Error al subir el archivo");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  const visibleFiles = existingFiles.slice(0, visibleCount);
+  const hiddenCount = existingFiles.length - visibleCount;
+
+  return (
+    <div className="file-upload-overlay" onClick={onClose}>
+      <div className="file-upload-modal" onClick={(e) => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="file-upload-header">
+          <div className="file-upload-header__left">
+            <div className="file-upload-header__icon-wrap">
+              <span className="file-upload-header__icon">📎</span>
+            </div>
+            <div>
+              <p className="file-upload-header__title">Archivos</p>
+              <p className="file-upload-header__sub">📁 {folderName}</p>
+            </div>
+          </div>
+          <button className="file-upload-close" onClick={onClose}>✕</button>
+        </div>
+
+        <div className="file-upload-body">
+
+          {/* ── Upload section ── */}
+          <div className="file-upload-section-label">Subir nuevo archivo</div>
+          {!file ? (
+            <div
+              className={`file-drop-zone ${isDragging ? "file-drop-zone--active" : ""}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => inputRef.current?.click()}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                style={{ display: "none" }}
+                onChange={handleFileInput}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.zip"
+              />
+              <div className="file-drop-zone__icon">{isDragging ? "✨" : "☁️"}</div>
+              <p className="file-drop-zone__title">
+                {isDragging ? "Soltá el archivo acá" : "Arrastrá o hacé clic para subir"}
+              </p>
+              <p className="file-drop-zone__sub">PDF, Word, Excel, imágenes y más</p>
+              <button
+                className="file-drop-zone__btn"
+                onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+                type="button"
+              >
+                Seleccionar archivo
+              </button>
+            </div>
+          ) : (
+            <div className="file-preview">
+              <div className="file-preview__card">
+                <div className="file-preview__icon">{getFileIcon(file.name)}</div>
+                <div className="file-preview__info">
+                  <p className="file-preview__name">{file.name}</p>
+                  <p className="file-preview__size">{formatSize(file.size)}</p>
+                </div>
+                {!uploading && !success && (
+                  <button className="file-preview__remove" onClick={() => setFile(null)}>✕</button>
+                )}
+              </div>
+              {success && (
+                <div className="file-upload-success">
+                  <span className="file-upload-success__icon">✅</span>
+                  <span>¡Archivo subido con éxito!</span>
+                </div>
+              )}
+              {uploading && (
+                <div className="file-upload-progress-bar">
+                  <div className="file-upload-progress-bar__fill" />
+                </div>
+              )}
+              {error && <p className="file-upload-error">{error}</p>}
+            </div>
+          )}
+
+          {/* Upload button (inline, compact) */}
+          {file && (
+            <button
+              className="file-upload-confirm file-upload-confirm--inline"
+              onClick={handleUpload}
+              disabled={uploading || success}
+            >
+              {uploading ? (
+                <span className="file-upload-confirm__loading">
+                  <span className="file-upload-spinner" />
+                  Subiendo…
+                </span>
+              ) : success ? "¡Listo! 🎉" : "Subir archivo"}
+            </button>
+          )}
+
+          {/* ── Existing files section ── */}
+          <div className="file-upload-divider" />
+          <div className="file-upload-section-label">
+            Archivos en esta carpeta
+            {!loadingFiles && existingFiles.length > 0 && (
+              <span className="file-upload-section-badge">{existingFiles.length}</span>
+            )}
+          </div>
+
+          {loadingFiles ? (
+            <div className="folder-files-loading">
+              <div className="folder-files-skeleton" />
+              <div className="folder-files-skeleton folder-files-skeleton--short" />
+            </div>
+          ) : existingFiles.length === 0 ? (
+            <p className="file-upload-empty-files">No hay archivos subidos todavía.</p>
+          ) : (
+            <>
+              <div className="folder-files-list">
+                {visibleFiles.map((f) => (
+                  <div
+                    key={f.fileId}
+                    className={`folder-file-item ${deletingId === f.fileId ? "folder-file-item--deleting" : ""}`}
+                  >
+                    <div className="folder-file-item__icon">{getFileIcon(f.name)}</div>
+                    <div className="folder-file-item__info">
+                      <p className="folder-file-item__name">{f.name}</p>
+                    </div>
+                    <button
+                      className="folder-file-item__delete"
+                      onClick={() => deleteFile(f.fileId)}
+                      disabled={deletingId === f.fileId}
+                      title="Eliminar archivo"
+                    >
+                      {deletingId === f.fileId
+                        ? <span className="folder-file-delete-spinner" />
+                        : "✕"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {hiddenCount > 0 && (
+                <button
+                  className="folder-files-show-more"
+                  onClick={() => setVisibleCount((c) => c + MODAL_FILES_PAGE_SIZE)}
+                >
+                  Ver {hiddenCount} más ▼
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="file-upload-footer">
+          <button className="file-upload-cancel" onClick={onClose} disabled={uploading}>
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Folder Files Panel ──────────────────────────────────────────────────────
+const FILES_PAGE_SIZE = 4;
+
+function FolderFilesPanel({ folderId, folderName, onUpload }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(FILES_PAGE_SIZE);
+  const [deletingId, setDeletingId] = useState(null);
+
+  useEffect(() => {
+    loadFiles();
+  }, [folderId]);
+
+  async function loadFiles() {
+    setLoading(true);
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/${folderId}/files`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setFiles(Array.isArray(data) ? data : []);
+    } catch {
+      setFiles([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteFile(fileId) {
+    setDeletingId(fileId);
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/file/${folderId}/${fileId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+      setFiles((prev) => {
+        const next = prev.filter((f) => f.fileId !== fileId);
+        // Si al borrar el último visible hay más, mantenemos el visibleCount
+        // para que el siguiente aparezca automáticamente
+        return next;
+      });
+    } catch (err) {
+      console.error("Error al eliminar archivo", err);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function getFileIcon(name) {
+    if (!name) return "📄";
+    const ext = name.split(".").pop().toLowerCase();
+    if (ext === "pdf") return "📕";
+    if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) return "🖼️";
+    if (["doc", "docx"].includes(ext)) return "📝";
+    if (["xls", "xlsx"].includes(ext)) return "📊";
+    if (["ppt", "pptx"].includes(ext)) return "📌";
+    if (["zip", "rar", "7z"].includes(ext)) return "🗜️";
+    return "📄";
+  }
+
+  const visibleFiles = files.slice(0, visibleCount);
+  const hiddenCount = files.length - visibleCount;
+
+  return (
+    <div className="folder-files-panel">
+      <div className="folder-files-panel__header">
+        <div className="folder-files-panel__header-left">
+          <span className="folder-files-panel__header-icon">📎</span>
+          <span className="folder-files-panel__title">Archivos</span>
+          {!loading && (
+            <span className="folder-files-panel__badge">{files.length}</span>
+          )}
+        </div>
+        <button
+          className="folder-files-panel__upload-btn"
+          onClick={onUpload}
+          type="button"
+        >
+          <span>+</span> Subir archivo
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="folder-files-loading">
+          <div className="folder-files-skeleton" />
+          <div className="folder-files-skeleton folder-files-skeleton--short" />
+        </div>
+      ) : files.length === 0 ? (
+        <div className="folder-files-empty" onClick={onUpload}>
+          <span className="folder-files-empty__icon">📂</span>
+          <p className="folder-files-empty__text">No hay archivos todavía</p>
+          <span className="folder-files-empty__cta">Subí el primero →</span>
+        </div>
+      ) : (
+        <>
+          <div className="folder-files-list">
+            {visibleFiles.map((file) => (
+              <div
+                key={file.fileId}
+                className={`folder-file-item ${deletingId === file.fileId ? "folder-file-item--deleting" : ""}`}
+              >
+                <div className="folder-file-item__icon">{getFileIcon(file.name)}</div>
+                <div className="folder-file-item__info">
+                  <p className="folder-file-item__name">{file.name}</p>
+                  <p className="folder-file-item__id">ID: {file.fileId.slice(0, 8)}…</p>
+                </div>
+                <button
+                  className="folder-file-item__delete"
+                  onClick={() => deleteFile(file.fileId)}
+                  disabled={deletingId === file.fileId}
+                  title="Eliminar archivo"
+                >
+                  {deletingId === file.fileId ? (
+                    <span className="folder-file-delete-spinner" />
+                  ) : "✕"}
+                </button>
+              </div>
+            ))}
+          </div>
+          {hiddenCount > 0 && (
+            <button
+              className="folder-files-show-more"
+              onClick={() => setVisibleCount((c) => c + FILES_PAGE_SIZE)}
+            >
+              Ver {hiddenCount} más ▼
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 export default function StudyHub() {
   const navigate = useNavigate();
@@ -221,23 +630,21 @@ export default function StudyHub() {
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [quickAssignChat, setQuickAssignChat] = useState(null);
   const [pickFolderMode, setPickFolderMode] = useState(null);
-  // folderId → percentage (null = todavía cargando)
   const [folderProgress, setFolderProgress] = useState({});
-  // folderId → number of chats
   const [folderChatCounts, setFolderChatCounts] = useState({});
-  // Set de chatIds que ya están en alguna carpeta
   const [organizedChatIds, setOrganizedChatIds] = useState(new Set());
-  // folderId → { flashcards: [], devQuestions: [] } para ProgressView
   const [folderStats, setFolderStats] = useState({});
   const [selectedProgressFolder, setSelectedProgressFolder] = useState(null);
   const [loadingProgressFolder, setLoadingProgressFolder] = useState(false);
+  // File upload state
+  const [uploadModalFolder, setUploadModalFolder] = useState(null); // { id, name }
+  const [filesPanelRefresh, setFilesPanelRefresh] = useState({});   // folderId → counter
 
   useEffect(() => {
     loadFolders();
     loadAllChats();
   }, []);
 
-  // ── Cargar progress de todas las carpetas en paralelo ──
   async function loadFolderProgressBatch(folderList) {
     if (!folderList.length) return;
     const token = getToken?.() || "";
@@ -261,7 +668,6 @@ export default function StudyHub() {
     setFolderProgress(progressMap);
   }
 
-  // ── Cargar chat count + IDs de todas las carpetas en paralelo ──
   async function loadFolderChatCountsBatch(folderList) {
     if (!folderList.length) return;
     const token = getToken?.() || "";
@@ -306,7 +712,7 @@ export default function StudyHub() {
         ? data.map((folder) => ({
             id: folder.folderId || folder.id,
             name: folder.name,
-            chatCount: 0, // se actualiza con loadFolderChatCountsBatch
+            chatCount: 0,
             createdAt: folder.createdAt,
           }))
         : [];
@@ -366,7 +772,6 @@ export default function StudyHub() {
       const chats = Array.isArray(data) ? data : [];
       setFolderChats(chats);
       setSelectedFolder(folderId);
-      // Actualizar el count de esa carpeta con el dato real
       setFolderChatCounts((prev) => ({ ...prev, [folderId]: chats.length }));
     } catch {
       setFolderChats([]);
@@ -383,9 +788,7 @@ export default function StudyHub() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (selectedFolder) loadFolderChats(selectedFolder);
-      // Recargar counts e IDs organizados después de asignar
       loadFolderChatCountsBatch(folders);
-      // Actualizar organizedChatIds inmediatamente sin esperar el batch
       setOrganizedChatIds((prev) => new Set([...prev, chatId]));
       setQuickAssignChat(null);
     } catch (err) {
@@ -413,7 +816,6 @@ export default function StudyHub() {
     }
   }
 
-  // ── Cargar stats de una carpeta para ProgressView ──
   async function loadFolderStatsForProgress(folderId) {
     if (folderStats[folderId]) {
       setSelectedProgressFolder(folderId);
@@ -446,17 +848,18 @@ export default function StudyHub() {
     }
   }
 
-  // Conteo total de chats organizados (suma de todos los counts por carpeta)
+  // Trigger refresh in FolderFilesPanel after upload
+  function handleFileUploaded(folderId) {
+    setFilesPanelRefresh((prev) => ({ ...prev, [folderId]: (prev[folderId] || 0) + 1 }));
+  }
+
   const totalOrganizedChats = Object.values(folderChatCounts).reduce((s, c) => s + c, 0);
 
-  // Chats realmente sin organizar: los que no están en ninguna carpeta
-  // organizedChatIds se llena en loadFolderChatCountsBatch con los IDs reales
   const unorganizedChats = allChats.filter(
     (chat) => !organizedChatIds.has(chat.chatId || chat.id)
   );
   const unorganizedCount = unorganizedChats.length;
 
-  // Folders con chatCount actualizado desde folderChatCounts
   const foldersWithCounts = folders.map((f) => ({
     ...f,
     chatCount: folderChatCounts[f.id] ?? 0,
@@ -490,6 +893,18 @@ export default function StudyHub() {
             setPickFolderMode(null);
           }}
           onClose={() => setPickFolderMode(null)}
+        />
+      )}
+
+      {uploadModalFolder && (
+        <FileUploadModal
+          folderId={uploadModalFolder.id}
+          folderName={uploadModalFolder.name}
+          onClose={() => setUploadModalFolder(null)}
+          onUploaded={(fileId) => {
+            handleFileUploaded(uploadModalFolder.id);
+            setUploadModalFolder(null);
+          }}
         />
       )}
 
@@ -599,6 +1014,8 @@ export default function StudyHub() {
             assignChatToFolder={assignChatToFolder}
             onQuickAssign={(chatId) => setQuickAssignChat(chatId)}
             generateExam={generateExam}
+            onUploadFile={(folder) => setUploadModalFolder(folder)}
+            filesPanelRefresh={filesPanelRefresh}
           />
         )}
         {view === "progress" && (
@@ -655,6 +1072,8 @@ function FoldersView({
   assignChatToFolder,
   onQuickAssign,
   generateExam,
+  onUploadFile,
+  filesPanelRefresh,
 }) {
   const [showAddChat, setShowAddChat] = useState(false);
   const isEmpty = !folders || folders.length === 0;
@@ -741,6 +1160,16 @@ function FoldersView({
                   >
                     ✍️
                   </button>
+                  <button
+                    className="folder-tool-btn folder-tool-btn--files"
+                    title="Subir archivo"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUploadFile({ id: folder.id, name: folder.name });
+                    }}
+                  >
+                    📎
+                  </button>
                 </div>
               </div>
             );
@@ -754,6 +1183,15 @@ function FoldersView({
             <div className="folder-actions">
               <button className="btn-add-chat" onClick={() => setShowAddChat(!showAddChat)}>
                 + Agregar chat
+              </button>
+              <button
+                className="btn-upload-file"
+                onClick={() => {
+                  const folder = folders.find((f) => f.id === selectedFolder);
+                  onUploadFile({ id: selectedFolder, name: folder?.name || "Carpeta" });
+                }}
+              >
+                📎 Subir archivo
               </button>
               <button className="btn-flashcards" onClick={() => { trackStudyAction("flashcards"); navigate(`/folder/${selectedFolder}/flashcards`); }}>
                 🧠 Flashcards
@@ -794,6 +1232,17 @@ function FoldersView({
               <button onClick={() => setShowAddChat(false)}>Cerrar</button>
             </div>
           )}
+
+          {/* Files Panel */}
+          <FolderFilesPanel
+            key={`${selectedFolder}-${filesPanelRefresh[selectedFolder] || 0}`}
+            folderId={selectedFolder}
+            folderName={folders.find((f) => f.id === selectedFolder)?.name || "Carpeta"}
+            onUpload={() => {
+              const folder = folders.find((f) => f.id === selectedFolder);
+              onUploadFile({ id: selectedFolder, name: folder?.name || "Carpeta" });
+            }}
+          />
 
           {isLoadingChats ? (
             <p>Cargando chats...</p>
@@ -840,7 +1289,6 @@ function ProgressView({
 }) {
   const stats = selectedProgressFolder ? folderStats[selectedProgressFolder] : null;
 
-  // Calcular stats de dev-questions (backend ya solo devuelve respondidas)
   function calcDevStats(devQuestions) {
     if (!devQuestions || devQuestions.length === 0) return { count: 0, avgScore: null };
     const avgScore =
@@ -855,10 +1303,8 @@ function ProgressView({
   const lastFlashcards = stats ? [...stats.flashcards].reverse().slice(0, 5) : [];
   const lastDevQuestions = stats ? [...stats.devQuestions].reverse().slice(0, 5) : [];
 
-  // Puntaje promedio de dev como % para la barra (escala 0-10)
   const devScorePercent = devStats?.avgScore != null ? (devStats.avgScore / 10) * 100 : 0;
 
-  // Color de puntaje
   function scoreColor(score) {
     if (score == null) return "rgba(255,255,255,0.3)";
     if (score >= 7) return "#22c55e";
@@ -868,7 +1314,6 @@ function ProgressView({
 
   return (
     <div className="progress-view">
-      {/* Resumen global */}
       <div className="progress-global">
         <div className="progress-stat-card">
           <div className="progress-stat-value">{allChats.length}</div>
@@ -884,7 +1329,6 @@ function ProgressView({
         </div>
       </div>
 
-      {/* Progreso por carpeta — lista */}
       <div className="progress-folders-section">
         <h3 className="progress-section-title">Progreso por carpeta</h3>
         {folders.length === 0 && (
@@ -928,7 +1372,6 @@ function ProgressView({
         </div>
       </div>
 
-      {/* Detalle de carpeta seleccionada */}
       {selectedProgressFolder && (
         <div className="progress-folder-detail">
           {loadingProgressFolder ? (
@@ -940,7 +1383,6 @@ function ProgressView({
               </h3>
 
               <div className="progress-detail-grid">
-                {/* Flashcards card */}
                 <div className="progress-detail-card progress-detail-card--flash">
                   <div className="progress-detail-card__header">
                     <span className="progress-detail-card__icon">🧠</span>
@@ -974,7 +1416,6 @@ function ProgressView({
                   )}
                 </div>
 
-                {/* Dev questions card */}
                 <div className="progress-detail-card progress-detail-card--dev">
                   <div className="progress-detail-card__header">
                     <span className="progress-detail-card__icon">✍️</span>
