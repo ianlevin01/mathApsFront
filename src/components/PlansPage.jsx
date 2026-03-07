@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { getToken } from "../auth"; // 👈 ajustá si tu helper está en otra ruta
+import { getToken } from "../auth";
 import "../styles/plans.css";
 
 const API_BASE = "https://api.mathaps.online";
@@ -60,20 +60,6 @@ const PLANS = [
   },
 ];
 
-function openLemonPopup(url) {
-  if (!url) return;
-
-  const popupUrl = url.includes("?")
-    ? `${url}&embed=1`
-    : `${url}?embed=1`;
-
-  window.open(
-    popupUrl,
-    "_blank",
-    "width=480,height=720,scrollbars=yes,resizable=yes"
-  );
-}
-
 export default function PlansPage() {
   const navigate = useNavigate();
 
@@ -88,19 +74,14 @@ export default function PlansPage() {
         return;
       }
 
-      const response = await fetch(
-        `${API_BASE}/webhook/create-checkout`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            plan: planId,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE}/webhook/create-checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ plan: planId }),
+      });
 
       const data = await response.json();
 
@@ -110,7 +91,26 @@ export default function PlansPage() {
         return;
       }
 
-      openLemonPopup(data.checkoutUrl);
+      const popupUrl = data.checkoutUrl.includes("?")
+        ? `${data.checkoutUrl}&embed=1`
+        : `${data.checkoutUrl}?embed=1`;
+
+      // Abrir el popup
+      const popup = window.open(
+        popupUrl,
+        "_blank",
+        "width=480,height=720,scrollbars=yes,resizable=yes"
+      );
+
+      if (!popup) {
+        // Bloqueado por el navegador → redirigir en la misma pestaña
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      // Navegar inmediatamente a la sección de suscripción
+      // El popup sigue abierto por encima mientras el usuario paga
+      navigate("/account?section=billing");
 
     } catch (error) {
       console.error(error);

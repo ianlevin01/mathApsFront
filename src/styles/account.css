@@ -720,3 +720,16 @@ select.acc-input option {
     grid-template-columns: 1fr 1fr;
   }
 }
+.acc-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1a3a2a;
+  border: 1px solid #2d6a4a;
+  color: #6ee7a0;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}

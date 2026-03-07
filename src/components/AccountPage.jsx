@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getToken, getEmailFromToken, removeToken } from "../auth";
 import "../styles/account.css";
 
@@ -15,29 +15,48 @@ const PLAN_PRICE = { plus: "4.99", pro: "9.99" };
 
 export default function AccountPage({ onLogout }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  /* ── state ── */
   const [user, setUser]       = useState(null);
   const [loading, setLoading] = useState(true);
-  const [section, setSection] = useState("overview");
+  const [section, setSection] = useState(searchParams.get("section") || "overview");
 
-  /* password change */
+  // Para mostrar el banner de pago exitoso
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+
+  // password change
   const [pwForm, setPwForm]       = useState({ current: "", next: "", confirm: "" });
   const [pwError, setPwError]     = useState("");
   const [pwSuccess, setPwSuccess] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
 
-  /* cancel modal */
+  // cancel modal
   const [showCancel, setShowCancel]       = useState(false);
   const [cancelReason, setCancelReason]   = useState("");
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  /* delete modal */
+  // delete modal
   const [showDelete, setShowDelete]       = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  useEffect(() => { fetchUser(); }, []);
+  const pollRef = useRef(null);
+
+  useEffect(() => {
+    const sectionParam = searchParams.get("section");
+    if (sectionParam) setSection(sectionParam);
+
+    // Si llegamos desde el checkout, hacer polling hasta que el plan cambie
+    if (sectionParam === "billing") {
+      fetchUserAndPoll();
+    } else {
+      fetchUser();
+    }
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   async function fetchUser() {
     setLoading(true);
@@ -49,25 +68,63 @@ export default function AccountPage({ onLogout }) {
       if (res.ok) {
         const data = await res.json();
         setUser(data);
+        return data;
       } else {
         const email = getEmailFromToken();
-        setUser({ email, plan: "free", messagesUsed: 0, messagesLimit: 20, imagesUsed: 0, imagesLimit: 5 });
+        const fallback = { email, plan: "free", messagesUsed: 0, messagesLimit: 20, imagesUsed: 0, imagesLimit: 5 };
+        setUser(fallback);
+        return fallback;
       }
     } catch {
       const email = getEmailFromToken();
-      setUser({ email, plan: "free", messagesUsed: 0, messagesLimit: 20, imagesUsed: 0, imagesLimit: 5 });
+      const fallback = { email, plan: "free", messagesUsed: 0, messagesLimit: 20, imagesUsed: 0, imagesLimit: 5 };
+      setUser(fallback);
+      return fallback;
     } finally {
       setLoading(false);
     }
   }
 
+  // Carga el perfil y si el plan sigue en "free", reintenta cada 3s hasta 30s
+  async function fetchUserAndPoll() {
+    const data = await fetchUser();
+
+    if (data?.plan && data.plan !== "free") {
+      // Ya tiene plan premium, mostrar banner
+      setShowSuccessBanner(true);
+      return;
+    }
+
+    let attempts = 0;
+    pollRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const token = getToken();
+        const res = await fetch(`${API_BASE}/auth/user/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const fresh = await res.json();
+          if (fresh?.plan && fresh.plan !== "free") {
+            setUser(fresh);
+            setShowSuccessBanner(true);
+            clearInterval(pollRef.current);
+          }
+        }
+      } catch { /* silencioso */ }
+
+      if (attempts >= 10) {
+        // 10 intentos × 3s = 30s máximo, dejar de intentar
+        clearInterval(pollRef.current);
+      }
+    }, 3000);
+  }
+
   async function handleChangePassword(e) {
     e.preventDefault();
     setPwError(""); setPwSuccess("");
-
     if (pwForm.next !== pwForm.confirm) { setPwError("Las contraseñas no coinciden."); return; }
     if (pwForm.next.length < 8)         { setPwError("Mínimo 8 caracteres."); return; }
-
     setPwLoading(true);
     try {
       const token = getToken();
@@ -104,7 +161,7 @@ export default function AccountPage({ onLogout }) {
         setCancelReason("");
         await fetchUser();
       }
-    } catch { /* silencioso */ }
+    } catch { }
     finally { setCancelLoading(false); }
   }
 
@@ -122,8 +179,13 @@ export default function AccountPage({ onLogout }) {
         onLogout?.();
         navigate("/");
       }
-    } catch { /* silencioso */ }
+    } catch { }
     finally { setDeleteLoading(false); }
+  }
+
+  function handleSectionChange(id) {
+    setSection(id);
+    navigate("/account", { replace: true });
   }
 
   if (loading) return (
@@ -136,12 +198,9 @@ export default function AccountPage({ onLogout }) {
   const planMeta = PLAN_META[plan] || PLAN_META.free;
 
   const msgPct = user?.messagesLimit
-    ? Math.min(100, Math.round((user.messagesUsed / user.messagesLimit) * 100))
-    : 0;
-
+    ? Math.min(100, Math.round((user.messagesUsed / user.messagesLimit) * 100)) : 0;
   const imgPct = user?.imagesLimit
-    ? Math.min(100, Math.round((user.imagesUsed / user.imagesLimit) * 100))
-    : 0;
+    ? Math.min(100, Math.round((user.imagesUsed / user.imagesLimit) * 100)) : 0;
 
   const formatDate = (d) =>
     d ? new Date(d).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" }) : "—";
@@ -154,7 +213,6 @@ export default function AccountPage({ onLogout }) {
         <button className="account-back" onClick={() => navigate("/dashboard")}>
           ← Dashboard
         </button>
-
         <div className="account-avatar-wrap">
           <div className="account-avatar">
             {(user?.email?.[0] || "U").toUpperCase()}
@@ -166,7 +224,6 @@ export default function AccountPage({ onLogout }) {
             </span>
           </div>
         </div>
-
         <nav className="account-nav">
           {[
             { id: "overview", icon: "◈", label: "Resumen" },
@@ -176,14 +233,13 @@ export default function AccountPage({ onLogout }) {
             <button
               key={id}
               className={`account-nav-item ${section === id ? "active" : ""}`}
-              onClick={() => setSection(id)}
+              onClick={() => handleSectionChange(id)}
             >
               <span className="account-nav-icon">{icon}</span>
               {label}
             </button>
           ))}
         </nav>
-
         <button
           className="account-logout-btn"
           onClick={() => { removeToken(); onLogout?.(); navigate("/"); }}
@@ -199,8 +255,6 @@ export default function AccountPage({ onLogout }) {
         {section === "overview" && (
           <div className="account-section">
             <h1 className="account-section-title">Mi cuenta</h1>
-
-            {/* Info personal */}
             <div className="acc-card">
               <div className="acc-card-header">
                 <span className="acc-card-icon">👤</span>
@@ -234,7 +288,6 @@ export default function AccountPage({ onLogout }) {
               )}
             </div>
 
-            {/* Uso diario */}
             <div className="acc-card">
               <div className="acc-card-header">
                 <span className="acc-card-icon">📊</span>
@@ -245,7 +298,6 @@ export default function AccountPage({ onLogout }) {
                   </span>
                 )}
               </div>
-
               <div className="acc-usage-row">
                 <div className="acc-usage-label-row">
                   <span>Mensajes con IA</span>
@@ -261,7 +313,6 @@ export default function AccountPage({ onLogout }) {
                 </div>
                 <span className="acc-usage-hint">{msgPct}% utilizado hoy</span>
               </div>
-
               <div className="acc-usage-row" style={{ marginTop: "12px" }}>
                 <div className="acc-usage-label-row">
                   <span>Imágenes procesadas</span>
@@ -279,7 +330,6 @@ export default function AccountPage({ onLogout }) {
               </div>
             </div>
 
-            {/* Plan summary */}
             <div className="acc-card acc-card--plan" style={{ "--plan-color": planMeta.color }}>
               <div className="acc-card-header">
                 <span className="acc-card-icon">{planMeta.icon}</span>
@@ -312,7 +362,7 @@ export default function AccountPage({ onLogout }) {
                     <span className="acc-field-label">Monto</span>
                     <span className="acc-field-value">${PLAN_PRICE[plan] ?? "—"}/mes</span>
                   </div>
-                  <button className="acc-btn acc-btn--ghost" onClick={() => setSection("billing")}>
+                  <button className="acc-btn acc-btn--ghost" onClick={() => handleSectionChange("billing")}>
                     Gestionar suscripción →
                   </button>
                 </>
@@ -325,6 +375,14 @@ export default function AccountPage({ onLogout }) {
         {section === "billing" && (
           <div className="account-section">
             <h1 className="account-section-title">Suscripción y facturación</h1>
+
+            {/* Banner post-pago */}
+            {showSuccessBanner && (
+              <div className="acc-success-banner">
+                <span>🎉</span>
+                <span>¡Pago aprobado! Ya tenés acceso a todas las funciones de tu nuevo plan.</span>
+              </div>
+            )}
 
             {plan === "free" ? (
               <div className="acc-card">
@@ -395,7 +453,6 @@ export default function AccountPage({ onLogout }) {
         {section === "security" && (
           <div className="account-section">
             <h1 className="account-section-title">Seguridad</h1>
-
             {user?.isGoogleUser ? (
               <div className="acc-card">
                 <div className="acc-card-header">
@@ -415,36 +472,21 @@ export default function AccountPage({ onLogout }) {
                 <form className="acc-form" onSubmit={handleChangePassword}>
                   <label className="acc-label">
                     Contraseña actual
-                    <input
-                      type="password"
-                      className="acc-input"
-                      value={pwForm.current}
+                    <input type="password" className="acc-input" value={pwForm.current}
                       onChange={e => setPwForm(p => ({ ...p, current: e.target.value }))}
-                      placeholder="••••••••"
-                      required
-                    />
+                      placeholder="••••••••" required />
                   </label>
                   <label className="acc-label">
                     Nueva contraseña
-                    <input
-                      type="password"
-                      className="acc-input"
-                      value={pwForm.next}
+                    <input type="password" className="acc-input" value={pwForm.next}
                       onChange={e => setPwForm(p => ({ ...p, next: e.target.value }))}
-                      placeholder="Mínimo 8 caracteres"
-                      required
-                    />
+                      placeholder="Mínimo 8 caracteres" required />
                   </label>
                   <label className="acc-label">
                     Confirmar nueva contraseña
-                    <input
-                      type="password"
-                      className="acc-input"
-                      value={pwForm.confirm}
+                    <input type="password" className="acc-input" value={pwForm.confirm}
                       onChange={e => setPwForm(p => ({ ...p, confirm: e.target.value }))}
-                      placeholder="Repetí la contraseña"
-                      required
-                    />
+                      placeholder="Repetí la contraseña" required />
                   </label>
                   {pwError   && <div className="acc-alert acc-alert--error">{pwError}</div>}
                   {pwSuccess && <div className="acc-alert acc-alert--success">{pwSuccess}</div>}
@@ -494,27 +536,16 @@ export default function AccountPage({ onLogout }) {
             <div className="acc-modal-icon">😔</div>
             <h2 className="acc-modal-title">¿Cancelar suscripción?</h2>
             <p className="acc-modal-desc">
-              Seguís teniendo acceso hasta el{" "}
-              <strong>{formatDate(user?.nextBillingDate)}</strong>.
-              Después volvés al plan Free.
+              Seguís teniendo acceso hasta el <strong>{formatDate(user?.nextBillingDate)}</strong>. Después volvés al plan Free.
             </p>
             <div className="acc-modal-perks">
-              {[
-                `${user?.messagesLimit} mensajes/día`,
-                `${user?.imagesLimit} imágenes/día`,
-                "Modelos avanzados",
-                "Soporte prioritario",
-              ].map(f => (
+              {[`${user?.messagesLimit} mensajes/día`, `${user?.imagesLimit} imágenes/día`, "Modelos avanzados", "Soporte prioritario"].map(f => (
                 <div key={f} className="acc-perk-lost">✗ {f}</div>
               ))}
             </div>
             <label className="acc-label" style={{ marginTop: "16px" }}>
               ¿Por qué cancelás? <span className="acc-muted">(opcional)</span>
-              <select
-                className="acc-input"
-                value={cancelReason}
-                onChange={e => setCancelReason(e.target.value)}
-              >
+              <select className="acc-input" value={cancelReason} onChange={e => setCancelReason(e.target.value)}>
                 <option value="">Prefiero no decir</option>
                 <option value="price">Es muy caro</option>
                 <option value="features">No uso todas las funciones</option>
@@ -523,14 +554,8 @@ export default function AccountPage({ onLogout }) {
               </select>
             </label>
             <div className="acc-modal-actions">
-              <button className="acc-btn acc-btn--ghost" onClick={() => setShowCancel(false)}>
-                No, mantener plan
-              </button>
-              <button
-                className="acc-btn acc-btn--danger"
-                onClick={handleCancelSubscription}
-                disabled={cancelLoading}
-              >
+              <button className="acc-btn acc-btn--ghost" onClick={() => setShowCancel(false)}>No, mantener plan</button>
+              <button className="acc-btn acc-btn--danger" onClick={handleCancelSubscription} disabled={cancelLoading}>
                 {cancelLoading ? "Procesando..." : "Confirmar cancelación"}
               </button>
             </div>
@@ -546,26 +571,14 @@ export default function AccountPage({ onLogout }) {
             <div className="acc-modal-icon">⚠️</div>
             <h2 className="acc-modal-title">Eliminar cuenta permanentemente</h2>
             <p className="acc-modal-desc">
-              Se borrarán todos tus datos. Para confirmar, escribí tu email:
-              <br /><strong>{user?.email}</strong>
+              Se borrarán todos tus datos. Para confirmar, escribí tu email:<br /><strong>{user?.email}</strong>
             </p>
-            <input
-              type="email"
-              className="acc-input"
-              style={{ marginTop: "12px" }}
-              value={deleteConfirm}
-              onChange={e => setDeleteConfirm(e.target.value)}
-              placeholder={user?.email}
-            />
+            <input type="email" className="acc-input" style={{ marginTop: "12px" }}
+              value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder={user?.email} />
             <div className="acc-modal-actions">
-              <button className="acc-btn acc-btn--ghost" onClick={() => setShowDelete(false)}>
-                Cancelar
-              </button>
-              <button
-                className="acc-btn acc-btn--danger"
-                onClick={handleDeleteAccount}
-                disabled={deleteConfirm !== user?.email || deleteLoading}
-              >
+              <button className="acc-btn acc-btn--ghost" onClick={() => setShowDelete(false)}>Cancelar</button>
+              <button className="acc-btn acc-btn--danger" onClick={handleDeleteAccount}
+                disabled={deleteConfirm !== user?.email || deleteLoading}>
                 {deleteLoading ? "Eliminando..." : "Eliminar cuenta"}
               </button>
             </div>
