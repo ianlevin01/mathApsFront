@@ -85,7 +85,7 @@ export default function AccountPage({ onLogout }) {
     }
   }
 
-  // Carga el perfil y si el plan sigue en "free", reintenta cada 3s hasta 30s
+  // Carga el perfil y si el plan sigue en "free", reintenta cada 5s hasta 2 minutos
   async function fetchUserAndPoll() {
     const data = await fetchUser();
 
@@ -113,11 +113,11 @@ export default function AccountPage({ onLogout }) {
         }
       } catch { /* silencioso */ }
 
-      if (attempts >= 10) {
-        // 10 intentos × 3s = 30s máximo, dejar de intentar
+      if (attempts >= 24) {
+        // 24 intentos × 5s = 2 minutos máximo, dejar de intentar
         clearInterval(pollRef.current);
       }
-    }, 3000);
+    }, 5000);
   }
 
   async function handleChangePassword(e) {
