@@ -2009,3 +2009,975 @@
   border-color: rgba(124,92,255,0.42);
   color: #c4b5fd;
 }
+
+/* =========================================================
+   STREAK CARD
+========================================================= */
+.streak-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(135deg, rgba(251,146,60,0.10), rgba(239,68,68,0.07));
+  border: 1px solid rgba(251,146,60,0.28);
+  border-radius: 20px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: all 220ms ease;
+  cursor: default;
+}
+
+.streak-card__glow {
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(251,146,60,0.30), transparent 70%);
+  pointer-events: none;
+  animation: streakGlow 3s ease-in-out infinite;
+}
+
+@keyframes streakGlow {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.streak-card--urgent {
+  background: linear-gradient(135deg, rgba(239,68,68,0.14), rgba(220,38,38,0.09));
+  border-color: rgba(239,68,68,0.45);
+  animation: urgentPulse 2s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.0); }
+  50% { box-shadow: 0 0 0 6px rgba(239,68,68,0.10); }
+}
+
+.streak-card--done {
+  background: linear-gradient(135deg, rgba(34,197,94,0.10), rgba(16,185,129,0.07));
+  border-color: rgba(34,197,94,0.30);
+}
+
+.streak-card--done .streak-card__glow {
+  background: radial-gradient(circle, rgba(34,197,94,0.25), transparent 70%);
+}
+
+.streak-card--skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-color: rgba(255,255,255,0.07);
+  min-height: 88px;
+}
+
+.streak-skeleton-flame {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+.streak-skeleton-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.streak-skeleton-line {
+  height: 14px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 6px;
+}
+
+.streak-skeleton-line--lg { width: 55%; }
+.streak-skeleton-line--sm { width: 35%; }
+
+/* Left: flame + days */
+.streak-card__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.streak-card__flame {
+  font-size: 42px;
+  line-height: 1;
+  transition: transform 300ms ease;
+  filter: drop-shadow(0 0 10px rgba(251,146,60,0.50));
+}
+
+.streak-card__flame--warm {
+  animation: flameBob 2.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 12px rgba(251,146,60,0.60));
+}
+
+.streak-card__flame--hot {
+  animation: flameBob 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 18px rgba(239,68,68,0.70));
+}
+
+.streak-card__flame--inferno {
+  animation: flameBob 1.2s ease-in-out infinite, flameInferno 1.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 24px rgba(239,68,68,0.90));
+}
+
+@keyframes flameBob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.08); }
+}
+
+@keyframes flameInferno {
+  0%, 100% { filter: drop-shadow(0 0 24px rgba(239,68,68,0.90)); }
+  50% { filter: drop-shadow(0 0 32px rgba(251,146,60,1.0)); }
+}
+
+.streak-card__days-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.streak-card__days {
+  font-size: 36px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, #fb923c, #ef4444);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.streak-card--done .streak-card__days {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.streak-card__days-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Center */
+.streak-card__center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.streak-card__status {
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.streak-card__status--done {
+  color: #4ade80;
+}
+
+.streak-card__sub {
+  font-size: 12px;
+  color: rgba(255,255,255,0.50);
+  line-height: 1.4;
+}
+
+/* Right: CTA */
+.streak-card__right {
+  flex-shrink: 0;
+}
+
+.streak-card__btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 180ms ease;
+  box-shadow: 0 4px 16px rgba(239,68,68,0.35);
+  font-family: inherit;
+  letter-spacing: -0.01em;
+}
+
+.streak-card__btn:hover {
+  filter: brightness(1.10);
+  box-shadow: 0 6px 22px rgba(239,68,68,0.50);
+  transform: translateY(-2px);
+}
+
+.streak-card__btn--urgent {
+  animation: urgentBtnPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes urgentBtnPulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(239,68,68,0.35); }
+  50% { box-shadow: 0 4px 28px rgba(239,68,68,0.65); }
+}
+
+.streak-card__btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spinRound 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.streak-card__completed-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  background: rgba(34,197,94,0.14);
+  border: 1px solid rgba(34,197,94,0.30);
+  border-radius: 12px;
+  font-size: 20px;
+  color: #4ade80;
+  font-weight: 800;
+}
+
+.streak-card__completed-badge span:last-child {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .streak-card {
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 16px 18px;
+  }
+  .streak-card__left { gap: 10px; }
+  .streak-card__flame { font-size: 34px; }
+  .streak-card__days { font-size: 28px; }
+  .streak-card__center { min-width: 100%; order: 3; }
+  .streak-card__right { margin-left: auto; }
+}
+
+/* =========================================================
+   DAILY EXAM MODAL
+========================================================= */
+.daily-exam-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: 20px;
+  animation: pfFadeIn 200ms ease;
+}
+
+.daily-exam-modal {
+  background: #0d0d1c;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 24px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 40px 100px rgba(0,0,0,0.75), 0 0 0 1px rgba(251,146,60,0.14);
+  animation: pfSlideUp 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Header */
+.daily-exam-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: linear-gradient(135deg, rgba(251,146,60,0.10), rgba(239,68,68,0.06));
+  flex-shrink: 0;
+}
+
+.daily-exam-header__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.daily-exam-flame-icon {
+  font-size: 30px;
+  filter: drop-shadow(0 0 14px rgba(251,146,60,0.70));
+  animation: flameBob 2s ease-in-out infinite;
+}
+
+.daily-exam-header__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.daily-exam-header__sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+}
+
+.daily-exam-close {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.55);
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+  transition: all 140ms ease;
+  flex-shrink: 0;
+}
+.daily-exam-close:hover {
+  background: rgba(255,255,255,0.13);
+  color: #fff;
+}
+
+/* Step indicator */
+.daily-exam-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 16px 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+
+.daily-exam-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.daily-exam-step__dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border: 2px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.35);
+  transition: all 300ms ease;
+}
+
+.daily-exam-step.active .daily-exam-step__dot {
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 0 16px rgba(239,68,68,0.50);
+}
+
+.daily-exam-step.done .daily-exam-step__dot {
+  background: rgba(34,197,94,0.20);
+  border-color: rgba(34,197,94,0.40);
+  color: #4ade80;
+}
+
+.daily-exam-step__label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0.03em;
+  transition: color 300ms ease;
+}
+
+.daily-exam-step.active .daily-exam-step__label {
+  color: #fb923c;
+}
+
+.daily-exam-step.done .daily-exam-step__label {
+  color: #4ade80;
+}
+
+.daily-exam-step__line {
+  width: 48px;
+  height: 2px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  flex-shrink: 0;
+  margin: 0 4px;
+  margin-bottom: 18px;
+}
+
+/* Body */
+.daily-exam-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Folder picker */
+.daily-exam-pick__title {
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.80);
+  margin: 0 0 14px;
+}
+
+.daily-exam-empty {
+  font-size: 14px;
+  color: rgba(255,255,255,0.38);
+  text-align: center;
+  padding: 24px 0;
+  margin: 0;
+}
+
+.daily-exam-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.daily-exam-folder-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: all 160ms ease;
+}
+
+.daily-exam-folder-btn:hover {
+  background: rgba(251,146,60,0.10);
+  border-color: rgba(251,146,60,0.30);
+  transform: translateX(4px);
+}
+
+.daily-exam-folder-btn__icon { font-size: 20px; flex-shrink: 0; }
+.daily-exam-folder-btn__name { flex: 1; font-size: 14px; font-weight: 700; color: #fff; }
+.daily-exam-folder-btn__count { font-size: 12px; color: rgba(255,255,255,0.32); flex-shrink: 0; }
+.daily-exam-folder-btn__arrow { font-size: 15px; color: rgba(255,255,255,0.22); transition: transform 160ms ease; }
+.daily-exam-folder-btn:hover .daily-exam-folder-btn__arrow { transform: translateX(4px); color: #fb923c; }
+
+/* Loading */
+.daily-exam-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  gap: 16px;
+}
+
+.daily-exam-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(251,146,60,0.20);
+  border-top-color: #f97316;
+  border-radius: 50%;
+  animation: spinRound 0.8s linear infinite;
+}
+
+.daily-exam-spinner--sm {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+  border-color: rgba(255,255,255,0.25);
+  border-top-color: #fff;
+}
+
+.daily-exam-loading__text {
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
+  margin: 0;
+}
+
+/* Section label */
+.daily-exam-section-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 12px;
+}
+
+/* Question text */
+.daily-exam-question {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.5;
+  margin: 0 0 18px;
+  letter-spacing: -0.01em;
+}
+
+/* Options */
+.daily-exam-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.daily-exam-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: all 160ms ease;
+  width: 100%;
+}
+
+.daily-exam-option:hover:not(:disabled) {
+  background: rgba(124,92,255,0.10);
+  border-color: rgba(124,92,255,0.28);
+}
+
+.daily-exam-option--correct {
+  background: rgba(34,197,94,0.12);
+  border-color: rgba(34,197,94,0.38);
+}
+
+.daily-exam-option--wrong {
+  background: rgba(239,68,68,0.10);
+  border-color: rgba(239,68,68,0.30);
+}
+
+.daily-exam-option--dim {
+  opacity: 0.45;
+}
+
+.daily-exam-option__letter {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.60);
+  flex-shrink: 0;
+}
+
+.daily-exam-option__text {
+  flex: 1;
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+  font-weight: 500;
+}
+
+.daily-exam-option__check { color: #4ade80; font-size: 15px; font-weight: 900; }
+.daily-exam-option__cross { color: #f87171; font-size: 15px; font-weight: 900; }
+
+/* Feedback */
+.daily-exam-feedback {
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.daily-exam-feedback--correct {
+  background: rgba(34,197,94,0.10);
+  border: 1px solid rgba(34,197,94,0.24);
+  color: #4ade80;
+}
+
+.daily-exam-feedback--wrong {
+  background: rgba(239,68,68,0.09);
+  border: 1px solid rgba(239,68,68,0.22);
+  color: #f87171;
+}
+
+.daily-exam-feedback__exp {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.65);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Dev question */
+.daily-exam-answer-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.daily-exam-textarea {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.6;
+  transition: border-color 160ms ease;
+  box-sizing: border-box;
+}
+
+.daily-exam-textarea:focus {
+  outline: none;
+  border-color: rgba(251,146,60,0.45);
+  background: rgba(255,255,255,0.07);
+}
+
+.daily-exam-textarea::placeholder {
+  color: rgba(255,255,255,0.28);
+}
+
+.daily-exam-error {
+  font-size: 13px;
+  color: #f87171;
+  background: rgba(239,68,68,0.09);
+  border: 1px solid rgba(239,68,68,0.20);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 0;
+}
+
+/* Correction result */
+.daily-exam-correction {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.daily-exam-score-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.daily-exam-score {
+  font-size: 38px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.daily-exam-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.daily-exam-verdict--great {
+  background: rgba(34,197,94,0.14);
+  border: 1px solid rgba(34,197,94,0.28);
+  color: #4ade80;
+}
+
+.daily-exam-verdict--ok {
+  background: rgba(249,115,22,0.14);
+  border: 1px solid rgba(249,115,22,0.28);
+  color: #fb923c;
+}
+
+.daily-exam-verdict--bad {
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.26);
+  color: #f87171;
+}
+
+.daily-exam-correction-section {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.daily-exam-correction-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: rgba(255,255,255,0.35);
+  margin-bottom: 8px;
+}
+
+.daily-exam-correction-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.daily-exam-no-question {
+  text-align: center;
+  padding: 24px 0;
+  color: rgba(255,255,255,0.45);
+  font-size: 14px;
+}
+
+/* Buttons */
+.daily-exam-next-btn {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(124,92,255,0.20), rgba(90,62,224,0.14));
+  border: 1px solid rgba(124,92,255,0.35);
+  color: #c4b5fd;
+  border-radius: 12px;
+  padding: 13px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 160ms ease;
+  font-family: inherit;
+}
+
+.daily-exam-next-btn:hover {
+  background: linear-gradient(135deg, rgba(124,92,255,0.32), rgba(90,62,224,0.22));
+  border-color: rgba(124,92,255,0.55);
+  color: #ede9fe;
+  transform: translateY(-1px);
+}
+
+.daily-exam-submit-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 160ms ease;
+  box-shadow: 0 4px 16px rgba(239,68,68,0.30);
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.daily-exam-submit-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 22px rgba(239,68,68,0.44);
+  transform: translateY(-1px);
+}
+
+.daily-exam-submit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.daily-exam-btn-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.daily-exam-finish-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: 15px 24px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 180ms ease;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  box-shadow: 0 6px 20px rgba(239,68,68,0.38);
+  animation: finishGlow 2s ease-in-out infinite;
+}
+
+@keyframes finishGlow {
+  0%, 100% { box-shadow: 0 6px 20px rgba(239,68,68,0.38); }
+  50% { box-shadow: 0 8px 28px rgba(251,146,60,0.55); }
+}
+
+.daily-exam-finish-btn:hover {
+  filter: brightness(1.10);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 32px rgba(239,68,68,0.50);
+}
+
+/* ── Flashcard pip progress (3 dots) ── */
+.daily-exam-fc-progress {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.daily-exam-fc-pip {
+  flex: 1;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255,255,255,0.10);
+  transition: all 300ms ease;
+}
+
+.daily-exam-fc-pip--active {
+  background: rgba(251,146,60,0.55);
+  box-shadow: 0 0 8px rgba(251,146,60,0.40);
+}
+
+.daily-exam-fc-pip--correct {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34,197,94,0.40);
+}
+
+.daily-exam-fc-pip--wrong {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239,68,68,0.35);
+}
+
+/* Step sublabel (ej: "1/3") */
+.daily-exam-step__sublabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fb923c;
+  margin-left: 2px;
+}
+
+/* ── Progress delta section ── */
+.daily-exam-progress-delta {
+  background: linear-gradient(135deg, rgba(124,92,255,0.08), rgba(90,62,224,0.05));
+  border: 1px solid rgba(124,92,255,0.20);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.daily-exam-progress-delta__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.daily-exam-progress-delta__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
+}
+
+.daily-exam-progress-delta__badge {
+  background: linear-gradient(135deg, rgba(34,197,94,0.20), rgba(16,185,129,0.14));
+  border: 1px solid rgba(34,197,94,0.35);
+  color: #4ade80;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 3px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.02em;
+}
+
+.daily-exam-progress-delta__badge--neutral {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.45);
+}
+
+.daily-exam-progress-delta__loading {
+  font-size: 11px;
+  color: rgba(255,255,255,0.30);
+  font-style: italic;
+}
+
+.daily-exam-progress-delta__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.daily-exam-progress-delta__bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.daily-exam-progress-delta__bar-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.38);
+  font-weight: 700;
+  width: 36px;
+  flex-shrink: 0;
+}
+
+.daily-exam-progress-delta__bar-bg {
+  flex: 1;
+  height: 8px;
+  background: rgba(255,255,255,0.07);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.daily-exam-progress-delta__bar-fill {
+  height: 100%;
+  border-radius: 99px;
+}
+
+.daily-exam-progress-delta__bar-fill--before {
+  background: rgba(124,92,255,0.45);
+}
+
+.daily-exam-progress-delta__bar-fill--after {
+  background: linear-gradient(90deg, var(--violet-500), #4ade80);
+}
+
+.daily-exam-progress-delta__pct {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.60);
+  width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+}

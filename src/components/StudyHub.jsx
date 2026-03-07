@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken, getEmailFromToken } from "../auth";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 const API_BASE = "https://api.mathaps.online";
 
@@ -212,7 +216,6 @@ function QuickAssignModal({ chat, folders, onAssign, onClose }) {
 const MODAL_FILES_PAGE_SIZE = 4;
 
 function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
-  // Upload state
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -220,7 +223,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
   const [success, setSuccess] = useState(false);
   const inputRef = useRef(null);
 
-  // Existing files state
   const [existingFiles, setExistingFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [visibleCount, setVisibleCount] = useState(MODAL_FILES_PAGE_SIZE);
@@ -305,7 +307,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
       if (!res.ok) throw new Error("Error al subir el archivo");
       const data = await res.json();
       setSuccess(true);
-      // Add to existing list immediately
       setExistingFiles((prev) => [{ fileId: data.fileId, name: file.name, folderId }, ...prev]);
       setTimeout(() => {
         onUploaded(data.fileId);
@@ -326,8 +327,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
   return (
     <div className="file-upload-overlay" onClick={onClose}>
       <div className="file-upload-modal" onClick={(e) => e.stopPropagation()}>
-
-        {/* Header */}
         <div className="file-upload-header">
           <div className="file-upload-header__left">
             <div className="file-upload-header__icon-wrap">
@@ -342,8 +341,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
         </div>
 
         <div className="file-upload-body">
-
-          {/* ── Upload section ── */}
           <div className="file-upload-section-label">Subir nuevo archivo</div>
           {!file ? (
             <div
@@ -400,7 +397,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
             </div>
           )}
 
-          {/* Upload button (inline, compact) */}
           {file && (
             <button
               className="file-upload-confirm file-upload-confirm--inline"
@@ -416,7 +412,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
             </button>
           )}
 
-          {/* ── Existing files section ── */}
           <div className="file-upload-divider" />
           <div className="file-upload-section-label">
             Archivos en esta carpeta
@@ -469,7 +464,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
           )}
         </div>
 
-        {/* Footer */}
         <div className="file-upload-footer">
           <button className="file-upload-cancel" onClick={onClose} disabled={uploading}>
             Cerrar
@@ -489,9 +483,7 @@ function FolderFilesPanel({ folderId, folderName, onUpload }) {
   const [visibleCount, setVisibleCount] = useState(FILES_PAGE_SIZE);
   const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => {
-    loadFiles();
-  }, [folderId]);
+  useEffect(() => { loadFiles(); }, [folderId]);
 
   async function loadFiles() {
     setLoading(true);
@@ -519,12 +511,7 @@ function FolderFilesPanel({ folderId, folderName, onUpload }) {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error();
-      setFiles((prev) => {
-        const next = prev.filter((f) => f.fileId !== fileId);
-        // Si al borrar el último visible hay más, mantenemos el visibleCount
-        // para que el siguiente aparezca automáticamente
-        return next;
-      });
+      setFiles((prev) => prev.filter((f) => f.fileId !== fileId));
     } catch (err) {
       console.error("Error al eliminar archivo", err);
     } finally {
@@ -557,11 +544,7 @@ function FolderFilesPanel({ folderId, folderName, onUpload }) {
             <span className="folder-files-panel__badge">{files.length}</span>
           )}
         </div>
-        <button
-          className="folder-files-panel__upload-btn"
-          onClick={onUpload}
-          type="button"
-        >
+        <button className="folder-files-panel__upload-btn" onClick={onUpload} type="button">
           <span>+</span> Subir archivo
         </button>
       </div>
@@ -617,6 +600,556 @@ function FolderFilesPanel({ folderId, folderName, onUpload }) {
   );
 }
 
+// ── LaTeX rendering helpers (copiados de Flashcards.jsx y DevQuestions.jsx) ─
+function normalizeMathForExam(text) {
+  if (!text) return "";
+  let t = text;
+  // \[ ... \] → $$ ... $$
+  t = t.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
+  // \( ... \) → $ ... $
+  t = t.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner) => `$${inner}$`);
+  // \begin{...} suelto → $$ ... $$
+  t = t.replace(/((?<!\$)\s*)(\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\})/g, (match, pre, latex) => `${pre}$$${latex}$$`);
+  return t;
+}
+
+// Renderiza texto con LaTeX inline. Usa ReactMarkdown + remark-math + rehype-katex
+// igual que en Flashcards.jsx y DevQuestions.jsx.
+// IMPORTANTE: estos imports deben estar en el archivo (ya los tenés en los otros componentes).
+// Si no los tenés en StudyHub, agregá al tope del archivo:
+//   import ReactMarkdown from "react-markdown";
+//   import remarkMath from "remark-math";
+//   import rehypeKatex from "rehype-katex";
+//   import "katex/dist/katex.min.css";
+function ExamMathText({ children, className, block = false }) {
+  const processed = normalizeMathForExam(children ?? "");
+  const Tag = block ? "div" : "span";
+  return (
+    <Tag className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          p: ({ children: c }) => block ? <p>{c}</p> : <span>{c}</span>,
+        }}
+      >
+        {processed}
+      </ReactMarkdown>
+    </Tag>
+  );
+}
+
+// ── Daily Exam Modal ────────────────────────────────────────────────────────
+// Flujo: pick_folder → flashcard_loading → flashcards (3) → dev_loading → dev → done
+const DAILY_FC_COUNT = 3;
+
+function DailyExamModal({ folders, onClose, onCompleted }) {
+  // step: pick_folder | flashcard_loading | flashcards | dev_loading | dev | done
+  const [step, setStep] = useState("pick_folder");
+  const [selectedFolder, setSelectedFolder] = useState(null);
+  const [folderName, setFolderName] = useState("");
+
+  // Progress tracking
+  const [progressBefore, setProgressBefore] = useState(null);
+  const [progressAfter, setProgressAfter] = useState(null);
+
+  // Flashcards state — manejamos un array de 3 cards
+  const [flashcards, setFlashcards] = useState([]);        // array de cards
+  const [fcIndex, setFcIndex] = useState(0);               // card actual (0-2)
+  const [fcSelected, setFcSelected] = useState(null);      // opción elegida en la card actual
+  const [fcAnswered, setFcAnswered] = useState(false);
+  const [fcResults, setFcResults] = useState([]);          // { card, isCorrect }
+
+  // Dev question state
+  const [devQuestion, setDevQuestion] = useState(null);
+  const [devAnswer, setDevAnswer] = useState("");
+  const [devCorrection, setDevCorrection] = useState(null);
+  const [devSubmitting, setDevSubmitting] = useState(false);
+  const [devError, setDevError] = useState("");
+
+  const scoreColor = (s) => s >= 7 ? "#22c55e" : s >= 5 ? "#f97316" : "#ef4444";
+
+  // ── Fetch progress helper
+  async function fetchProgress(folderId) {
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/${folderId}/progress`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.percentage ?? null;
+    } catch { return null; }
+  }
+
+  // ── Pick folder → fetch progress + load 3 flashcards
+  async function pickFolder(folderId, name) {
+    setSelectedFolder(folderId);
+    setFolderName(name);
+    setStep("flashcard_loading");
+
+    // Fetch progress BEFORE exam
+    const pBefore = await fetchProgress(folderId);
+    setProgressBefore(pBefore);
+
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/${folderId}/flashcards`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const cards = Array.isArray(data.flashcards) ? data.flashcards.slice(0, DAILY_FC_COUNT) : [];
+      setFlashcards(cards);
+      setFcIndex(0);
+      setFcSelected(null);
+      setFcAnswered(false);
+      setFcResults([]);
+      setStep("flashcards");
+    } catch {
+      setStep("pick_folder");
+    }
+  }
+
+  // ── Current flashcard
+  const currentCard = flashcards[fcIndex] ?? null;
+
+  function handleFcSelect(optionId) {
+    if (fcAnswered || !currentCard) return;
+    const isCorrect = optionId === currentCard.correctId;
+    setFcSelected(optionId);
+    setFcAnswered(true);
+    setFcResults((prev) => [...prev, { card: currentCard, isCorrect }]);
+  }
+
+  async function handleFcNext() {
+    // Save correct flashcards (non-blocking)
+    const lastResult = fcResults[fcResults.length - 1];
+    if (lastResult?.isCorrect && currentCard) {
+      const token = getToken?.() || "";
+      fetch(`${API_BASE}/folder/${selectedFolder}/flashcards/correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ flashcards: [{ question: currentCard.question, correctId: currentCard.correctId }] }),
+      }).catch(() => {});
+    }
+
+    const nextIndex = fcIndex + 1;
+    if (nextIndex < flashcards.length) {
+      // Siguiente flashcard
+      setFcIndex(nextIndex);
+      setFcSelected(null);
+      setFcAnswered(false);
+    } else {
+      // Terminaron todas las flashcards → cargar dev question
+      setStep("dev_loading");
+      try {
+        const token = getToken?.() || "";
+        const res = await fetch(`${API_BASE}/folder/${selectedFolder}/dev-questions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ previousQuestions: [] }),
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setDevQuestion(data);
+        setStep("dev");
+      } catch {
+        setDevQuestion(null);
+        setStep("dev");
+      }
+    }
+  }
+
+  async function handleDevSubmit() {
+    if (!devAnswer.trim()) return;
+    setDevSubmitting(true);
+    setDevError("");
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/${selectedFolder}/dev-questions/correct`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          question: devQuestion.question,
+          context: devQuestion.context,
+          answer: devAnswer,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setDevCorrection(data);
+
+      // Fetch progress AFTER correction (non-blocking, update state when ready)
+      fetchProgress(selectedFolder).then((pAfter) => setProgressAfter(pAfter));
+    } catch {
+      setDevError("No se pudo corregir. Intentá de nuevo.");
+    } finally {
+      setDevSubmitting(false);
+    }
+  }
+
+  async function handleFinish() {
+    try {
+      const token = getToken?.() || "";
+      await fetch(`${API_BASE}/auth/racha`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+    } catch { /* non-blocking */ }
+    onCompleted();
+    onClose();
+  }
+
+  // ── Step indicator logic
+  const fcPhases = ["pick_folder", "flashcard_loading", "flashcards"];
+  const devPhases = ["dev_loading", "dev"];
+  const fcDone = !fcPhases.includes(step);
+  const devDone = step === "done";
+  const fcActive = fcPhases.includes(step);
+  const devActive = devPhases.includes(step);
+
+  // Progress delta
+  const progressDelta = progressAfter != null && progressBefore != null
+    ? Math.round(progressAfter - progressBefore)
+    : null;
+
+  return (
+    <div className="daily-exam-overlay" onClick={onClose}>
+      <div className="daily-exam-modal" onClick={(e) => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="daily-exam-header">
+          <div className="daily-exam-header__left">
+            <div className="daily-exam-flame-icon">🔥</div>
+            <div>
+              <p className="daily-exam-header__title">Examen Diario</p>
+              <p className="daily-exam-header__sub">3 flashcards + 1 pregunta a desarrollo</p>
+            </div>
+          </div>
+          <button className="daily-exam-close" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Step indicator: solo 2 pasos visibles — Flashcards y Desarrollo */}
+        <div className="daily-exam-steps">
+          <div className={`daily-exam-step ${fcActive ? "active" : ""} ${fcDone ? "done" : ""}`}>
+            <span className="daily-exam-step__dot">{fcDone ? "✓" : "🧠"}</span>
+            <span className="daily-exam-step__label">
+              Flashcards
+              {fcActive && step === "flashcards" && flashcards.length > 0 && (
+                <span className="daily-exam-step__sublabel"> {fcIndex + 1}/{flashcards.length}</span>
+              )}
+            </span>
+          </div>
+          <div className="daily-exam-step__line" />
+          <div className={`daily-exam-step ${devActive ? "active" : ""} ${devDone ? "done" : ""}`}>
+            <span className="daily-exam-step__dot">{devDone ? "✓" : "✍️"}</span>
+            <span className="daily-exam-step__label">Desarrollo</span>
+          </div>
+          <div className="daily-exam-step__line" />
+          <div className="daily-exam-step">
+            <span className="daily-exam-step__dot">🔥</span>
+            <span className="daily-exam-step__label">¡Racha!</span>
+          </div>
+        </div>
+
+        <div className="daily-exam-body">
+
+          {/* ── PICK FOLDER ── */}
+          {step === "pick_folder" && (
+            <div className="daily-exam-pick">
+              <p className="daily-exam-pick__title">¿De qué carpeta querés estudiar hoy?</p>
+              {folders.length === 0 ? (
+                <p className="daily-exam-empty">No tenés carpetas. Creá una primero.</p>
+              ) : (
+                <div className="daily-exam-folder-list">
+                  {folders.map((f) => (
+                    <button key={f.id} className="daily-exam-folder-btn" onClick={() => pickFolder(f.id, f.name)}>
+                      <span className="daily-exam-folder-btn__icon">📁</span>
+                      <span className="daily-exam-folder-btn__name">{f.name}</span>
+                      <span className="daily-exam-folder-btn__count">{f.chatCount} chats</span>
+                      <span className="daily-exam-folder-btn__arrow">→</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── LOADING ── */}
+          {(step === "flashcard_loading" || step === "dev_loading") && (
+            <div className="daily-exam-loading">
+              <div className="daily-exam-spinner" />
+              <p className="daily-exam-loading__text">
+                {step === "flashcard_loading" ? "Generando flashcards…" : "Generando pregunta de desarrollo…"}
+              </p>
+            </div>
+          )}
+
+          {/* ── FLASHCARDS (3 en secuencia) ── */}
+          {step === "flashcards" && currentCard && (
+            <div className="daily-exam-fc">
+              {/* Mini progress bar para las 3 flashcards */}
+              <div className="daily-exam-fc-progress">
+                {flashcards.map((_, i) => (
+                  <div
+                    key={i}
+                    className={`daily-exam-fc-pip ${
+                      i < fcIndex ? (fcResults[i]?.isCorrect ? "daily-exam-fc-pip--correct" : "daily-exam-fc-pip--wrong")
+                      : i === fcIndex ? "daily-exam-fc-pip--active"
+                      : ""
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <p className="daily-exam-section-label">🧠 Flashcard {fcIndex + 1} de {flashcards.length}</p>
+
+              <ExamMathText className="daily-exam-question" block>
+                {currentCard.question}
+              </ExamMathText>
+
+              <div className="daily-exam-options">
+                {currentCard.options.map((opt) => {
+                  let cls = "daily-exam-option";
+                  if (fcAnswered) {
+                    if (opt.id === currentCard.correctId) cls += " daily-exam-option--correct";
+                    else if (opt.id === fcSelected) cls += " daily-exam-option--wrong";
+                    else cls += " daily-exam-option--dim";
+                  }
+                  return (
+                    <button key={opt.id} className={cls} onClick={() => handleFcSelect(opt.id)} disabled={fcAnswered}>
+                      <span className="daily-exam-option__letter">{opt.id}</span>
+                      <ExamMathText className="daily-exam-option__text">{opt.text}</ExamMathText>
+                      {fcAnswered && opt.id === currentCard.correctId && <span className="daily-exam-option__check">✓</span>}
+                      {fcAnswered && opt.id === fcSelected && opt.id !== currentCard.correctId && <span className="daily-exam-option__cross">✗</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {fcAnswered && (
+                <>
+                  <div className={`daily-exam-feedback ${fcSelected === currentCard.correctId ? "daily-exam-feedback--correct" : "daily-exam-feedback--wrong"}`}>
+                    <span>{fcSelected === currentCard.correctId ? "🎉 ¡Correcto!" : "❌ Incorrecto"}</span>
+                    <ExamMathText className="daily-exam-feedback__exp" block>{currentCard.explanation}</ExamMathText>
+                  </div>
+                  <button className="daily-exam-next-btn" onClick={handleFcNext}>
+                    {fcIndex + 1 < flashcards.length
+                      ? `Siguiente flashcard (${fcIndex + 2}/${flashcards.length}) →`
+                      : "Continuar: Pregunta a desarrollo →"}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── DEV QUESTION ── */}
+          {step === "dev" && (
+            <div className="daily-exam-dev">
+              <p className="daily-exam-section-label">✍️ Pregunta a desarrollo</p>
+              {devQuestion ? (
+                <>
+                  <ExamMathText className="daily-exam-question" block>{devQuestion.question}</ExamMathText>
+
+                  {!devCorrection ? (
+                    <div className="daily-exam-answer-wrap">
+                      <textarea
+                        className="daily-exam-textarea"
+                        value={devAnswer}
+                        onChange={(e) => setDevAnswer(e.target.value)}
+                        placeholder="Escribí tu respuesta acá..."
+                        rows={5}
+                        autoFocus
+                      />
+                      {devError && <p className="daily-exam-error">{devError}</p>}
+                      <button
+                        className="daily-exam-submit-btn"
+                        onClick={handleDevSubmit}
+                        disabled={!devAnswer.trim() || devSubmitting}
+                      >
+                        {devSubmitting ? (
+                          <span className="daily-exam-btn-loading">
+                            <span className="daily-exam-spinner daily-exam-spinner--sm" />
+                            Corrigiendo…
+                          </span>
+                        ) : "Enviar respuesta →"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="daily-exam-correction">
+                      <div className="daily-exam-score-row">
+                        <span className="daily-exam-score" style={{ color: scoreColor(devCorrection.score) }}>
+                          {devCorrection.score}/10
+                        </span>
+                        <span className={`daily-exam-verdict ${devCorrection.score >= 7 ? "daily-exam-verdict--great" : devCorrection.score >= 5 ? "daily-exam-verdict--ok" : "daily-exam-verdict--bad"}`}>
+                          {devCorrection.score >= 7 ? "🎉 Excelente" : devCorrection.score >= 5 ? "👍 Bien" : "📖 Revisar"}
+                        </span>
+                      </div>
+
+                      <div className="daily-exam-correction-section">
+                        <span className="daily-exam-correction-label">Corrección de la IA</span>
+                        <ExamMathText className="daily-exam-correction-text" block>{devCorrection.feedback}</ExamMathText>
+                      </div>
+
+                      {devCorrection.modelAnswer && (
+                        <div className="daily-exam-correction-section">
+                          <span className="daily-exam-correction-label">Respuesta modelo</span>
+                          <ExamMathText className="daily-exam-correction-text" block>{devCorrection.modelAnswer}</ExamMathText>
+                        </div>
+                      )}
+
+                      {/* ── Progress delta ── */}
+                      {progressBefore != null && (
+                        <div className="daily-exam-progress-delta">
+                          <div className="daily-exam-progress-delta__header">
+                            <span className="daily-exam-progress-delta__label">📈 Progreso en {folderName}</span>
+                            {progressAfter != null && progressDelta > 0 && (
+                              <span className="daily-exam-progress-delta__badge">+{progressDelta}%</span>
+                            )}
+                            {progressAfter != null && progressDelta === 0 && (
+                              <span className="daily-exam-progress-delta__badge daily-exam-progress-delta__badge--neutral">Sin cambio</span>
+                            )}
+                            {progressAfter == null && (
+                              <span className="daily-exam-progress-delta__loading">calculando…</span>
+                            )}
+                          </div>
+                          <div className="daily-exam-progress-delta__bars">
+                            <div className="daily-exam-progress-delta__bar-row">
+                              <span className="daily-exam-progress-delta__bar-label">Antes</span>
+                              <div className="daily-exam-progress-delta__bar-bg">
+                                <div className="daily-exam-progress-delta__bar-fill daily-exam-progress-delta__bar-fill--before"
+                                  style={{ width: `${progressBefore}%` }} />
+                              </div>
+                              <span className="daily-exam-progress-delta__pct">{progressBefore}%</span>
+                            </div>
+                            {progressAfter != null && (
+                              <div className="daily-exam-progress-delta__bar-row">
+                                <span className="daily-exam-progress-delta__bar-label">Ahora</span>
+                                <div className="daily-exam-progress-delta__bar-bg">
+                                  <div className="daily-exam-progress-delta__bar-fill daily-exam-progress-delta__bar-fill--after"
+                                    style={{ width: `${progressAfter}%`, transition: "width 900ms cubic-bezier(0.22,1,0.36,1)" }} />
+                                </div>
+                                <span className="daily-exam-progress-delta__pct">{progressAfter}%</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <button className="daily-exam-finish-btn" onClick={handleFinish}>
+                        🔥 ¡Completar examen y mantener racha!
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="daily-exam-no-question">
+                  <p>No se pudo generar una pregunta para esta carpeta.</p>
+                  <button className="daily-exam-finish-btn" onClick={handleFinish}>
+                    🔥 Completar de todas formas
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Streak Card ─────────────────────────────────────────────────────────────
+function StreakCard({ racha, onStartExam, loading }) {
+  const dias = racha?.dias ?? 0;
+  const completadoHoy = racha?.completadoHoy ?? false;
+  const horasSiguiente = racha?.horasParaPerder ?? null; // hs restantes antes de perder racha
+
+  // Flame intensity based on streak
+  const flameClass = dias === 0 ? "" : dias < 3 ? "streak-card__flame--warm" : dias < 7 ? "streak-card__flame--hot" : "streak-card__flame--inferno";
+
+  function formatCountdown(hs) {
+    if (hs == null) return null;
+    if (hs <= 0) return "¡Se acaba ahora!";
+    const h = Math.floor(hs);
+    const m = Math.round((hs - h) * 60);
+    if (h === 0) return `${m}min`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}min`;
+  }
+
+  const countdown = formatCountdown(horasSiguiente);
+  const isUrgent = horasSiguiente != null && horasSiguiente <= 6 && !completadoHoy;
+
+  return (
+    <div className={`streak-card ${isUrgent ? "streak-card--urgent" : ""} ${completadoHoy ? "streak-card--done" : ""}`}>
+      <div className="streak-card__glow" />
+
+      {/* Flame + days */}
+      <div className="streak-card__left">
+        <div className={`streak-card__flame ${flameClass}`}>
+          🔥
+        </div>
+        <div className="streak-card__days-wrap">
+          <span className="streak-card__days">{dias}</span>
+          <span className="streak-card__days-label">días de racha</span>
+        </div>
+      </div>
+
+      {/* Center: info */}
+      <div className="streak-card__center">
+        {completadoHoy ? (
+          <>
+            <span className="streak-card__status streak-card__status--done">✅ ¡Completaste el examen de hoy!</span>
+            <span className="streak-card__sub">Volvé mañana para continuar tu racha</span>
+          </>
+        ) : dias === 0 ? (
+          <>
+            <span className="streak-card__status">Empezá tu racha hoy 🚀</span>
+            <span className="streak-card__sub">Hacé tu primer examen diario para comenzar</span>
+          </>
+        ) : (
+          <>
+            <span className="streak-card__status">
+              {isUrgent ? "⚠️ ¡Tu racha está en peligro!" : "Mantené tu racha activa 💪"}
+            </span>
+            <span className="streak-card__sub">
+              {countdown
+                ? isUrgent
+                  ? `Perdés la racha en ${countdown} — ¡hacé el examen ya!`
+                  : `Tenés ${countdown} para completar el examen de hoy`
+                : "Hacé una flashcard y una pregunta a desarrollo para mantenerla"}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* CTA */}
+      <div className="streak-card__right">
+        {!completadoHoy && (
+          <button
+            className={`streak-card__btn ${isUrgent ? "streak-card__btn--urgent" : ""}`}
+            onClick={onStartExam}
+            disabled={loading}
+          >
+            {loading ? <span className="streak-card__btn-spinner" /> : null}
+            {dias === 0 ? "Comenzar 🔥" : isUrgent ? "¡Hacerlo ahora! 🔥" : "Examen diario 🔥"}
+          </button>
+        )}
+        {completadoHoy && (
+          <div className="streak-card__completed-badge">
+            <span>🏆</span>
+            <span>Hoy ✓</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 export default function StudyHub() {
   const navigate = useNavigate();
@@ -636,19 +1169,50 @@ export default function StudyHub() {
   const [folderStats, setFolderStats] = useState({});
   const [selectedProgressFolder, setSelectedProgressFolder] = useState(null);
   const [loadingProgressFolder, setLoadingProgressFolder] = useState(false);
-  // File upload state
-  const [uploadModalFolder, setUploadModalFolder] = useState(null); // { id, name }
-  const [filesPanelRefresh, setFilesPanelRefresh] = useState({});   // folderId → counter
+  const [uploadModalFolder, setUploadModalFolder] = useState(null);
+  const [filesPanelRefresh, setFilesPanelRefresh] = useState({});
+
+  // ── Racha state
+  const [racha, setRacha] = useState(null);
+  const [rachaLoading, setRachaLoading] = useState(true);
+  const [showDailyExam, setShowDailyExam] = useState(false);
 
   useEffect(() => {
     loadFolders();
     loadAllChats();
+    loadRacha();
   }, []);
+
+  async function loadRacha() {
+    setRachaLoading(true);
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/auth/racha`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setRacha(data);
+    } catch {
+      setRacha({ dias: 0, completadoHoy: false, horasParaPerder: null });
+    } finally {
+      setRachaLoading(false);
+    }
+  }
+
+  function handleExamCompleted() {
+    // Optimistically update racha
+    setRacha((prev) => ({
+      ...prev,
+      completadoHoy: true,
+      dias: (prev?.dias ?? 0) + (prev?.completadoHoy ? 0 : 1),
+    }));
+    loadRacha(); // re-fetch from server
+  }
 
   async function loadFolderProgressBatch(folderList) {
     if (!folderList.length) return;
     const token = getToken?.() || "";
-
     const results = await Promise.allSettled(
       folderList.map((folder) =>
         fetch(`${API_BASE}/folder/${folder.id}/progress`, {
@@ -657,21 +1221,18 @@ export default function StudyHub() {
         }).then((r) => (r.ok ? r.json() : { percentage: 0 }))
       )
     );
-
     const progressMap = {};
     folderList.forEach((folder, i) => {
       const result = results[i];
       progressMap[folder.id] =
         result.status === "fulfilled" ? (result.value.percentage ?? 0) : 0;
     });
-
     setFolderProgress(progressMap);
   }
 
   async function loadFolderChatCountsBatch(folderList) {
     if (!folderList.length) return;
     const token = getToken?.() || "";
-
     const results = await Promise.allSettled(
       folderList.map((folder) =>
         fetch(`${API_BASE}/folder/${folder.id}/chats`, {
@@ -679,23 +1240,17 @@ export default function StudyHub() {
         }).then((r) => (r.ok ? r.json() : []))
       )
     );
-
     const countMap = {};
     const allOrganizedIds = new Set();
-
     folderList.forEach((folder, i) => {
       const result = results[i];
-      const chats =
-        result.status === "fulfilled" && Array.isArray(result.value)
-          ? result.value
-          : [];
+      const chats = result.status === "fulfilled" && Array.isArray(result.value) ? result.value : [];
       countMap[folder.id] = chats.length;
       chats.forEach((chat) => {
         const id = chat.chatId || chat.id;
         if (id) allOrganizedIds.add(id);
       });
     });
-
     setFolderChatCounts(countMap);
     setOrganizedChatIds(allOrganizedIds);
   }
@@ -833,7 +1388,6 @@ export default function StudyHub() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }).then((r) => (r.ok ? r.json() : [])),
       ]);
-
       setFolderStats((prev) => ({
         ...prev,
         [folderId]: {
@@ -848,30 +1402,19 @@ export default function StudyHub() {
     }
   }
 
-  // Trigger refresh in FolderFilesPanel after upload
   function handleFileUploaded(folderId) {
     setFilesPanelRefresh((prev) => ({ ...prev, [folderId]: (prev[folderId] || 0) + 1 }));
   }
 
   const totalOrganizedChats = Object.values(folderChatCounts).reduce((s, c) => s + c, 0);
-
-  const unorganizedChats = allChats.filter(
-    (chat) => !organizedChatIds.has(chat.chatId || chat.id)
-  );
+  const unorganizedChats = allChats.filter((chat) => !organizedChatIds.has(chat.chatId || chat.id));
   const unorganizedCount = unorganizedChats.length;
-
-  const foldersWithCounts = folders.map((f) => ({
-    ...f,
-    chatCount: folderChatCounts[f.id] ?? 0,
-  }));
+  const foldersWithCounts = folders.map((f) => ({ ...f, chatCount: folderChatCounts[f.id] ?? 0 }));
 
   return (
     <div className="study-hub">
       {showCreatePopup && (
-        <CreateFolderPopup
-          onClose={() => setShowCreatePopup(false)}
-          onCreate={createFolder}
-        />
+        <CreateFolderPopup onClose={() => setShowCreatePopup(false)} onCreate={createFolder} />
       )}
 
       {quickAssignChat && (
@@ -908,6 +1451,14 @@ export default function StudyHub() {
         />
       )}
 
+      {showDailyExam && (
+        <DailyExamModal
+          folders={foldersWithCounts}
+          onClose={() => setShowDailyExam(false)}
+          onCompleted={handleExamCompleted}
+        />
+      )}
+
       {/* Header */}
       <div className="study-header">
         <button className="btn-back" onClick={() => navigate("/dashboard")}>← Dashboard</button>
@@ -916,6 +1467,24 @@ export default function StudyHub() {
           <p className="study-subtitle">Tu espacio de aprendizaje personalizado</p>
         </div>
       </div>
+
+      {/* ── STREAK CARD ── */}
+      {!rachaLoading && (
+        <StreakCard
+          racha={racha}
+          onStartExam={() => setShowDailyExam(true)}
+          loading={rachaLoading}
+        />
+      )}
+      {rachaLoading && (
+        <div className="streak-card streak-card--skeleton">
+          <div className="streak-skeleton-flame" />
+          <div className="streak-skeleton-text">
+            <div className="streak-skeleton-line streak-skeleton-line--lg" />
+            <div className="streak-skeleton-line streak-skeleton-line--sm" />
+          </div>
+        </div>
+      )}
 
       {/* Tools strip */}
       <div className="study-tools-strip">
@@ -1007,10 +1576,7 @@ export default function StudyHub() {
             unorganizedChats={unorganizedChats}
             isLoadingChats={isLoadingChats}
             onCreateFolder={() => setShowCreatePopup(true)}
-            onSelectFolder={(id) => {
-              setSelectedFolder(id);
-              loadFolderChats(id);
-            }}
+            onSelectFolder={(id) => { setSelectedFolder(id); loadFolderChats(id); }}
             assignChatToFolder={assignChatToFolder}
             onQuickAssign={(chatId) => setQuickAssignChat(chatId)}
             generateExam={generateExam}
@@ -1059,21 +1625,9 @@ export default function StudyHub() {
 
 // ── Folders View ────────────────────────────────────────────────────────────
 function FoldersView({
-  navigate,
-  folders,
-  folderProgress,
-  selectedFolder,
-  folderChats,
-  allChats,
-  unorganizedChats,
-  isLoadingChats,
-  onCreateFolder,
-  onSelectFolder,
-  assignChatToFolder,
-  onQuickAssign,
-  generateExam,
-  onUploadFile,
-  filesPanelRefresh,
+  navigate, folders, folderProgress, selectedFolder, folderChats,
+  allChats, unorganizedChats, isLoadingChats, onCreateFolder, onSelectFolder,
+  assignChatToFolder, onQuickAssign, generateExam, onUploadFile, filesPanelRefresh,
 }) {
   const [showAddChat, setShowAddChat] = useState(false);
   const isEmpty = !folders || folders.length === 0;
@@ -1123,7 +1677,6 @@ function FoldersView({
           folders.map((folder, i) => {
             if (!folder || !folder.id) return null;
             const progress = folderProgress[folder.id] ?? null;
-
             return (
               <div
                 key={folder.id}
@@ -1136,40 +1689,22 @@ function FoldersView({
                 <div className="folder-icon">📁</div>
                 <div className="folder-name">{folder.name || "Sin nombre"}</div>
                 <div className="folder-count">{folder.chatCount} chats</div>
-
                 <div className="folder-card-tools" onClick={(e) => e.stopPropagation()}>
                   <button
                     className="folder-tool-btn folder-tool-btn--flash"
                     title="Flashcards"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      trackStudyAction("flashcards");
-                      navigate(`/folder/${folder.id}/flashcards`);
-                    }}
-                  >
-                    🧠
-                  </button>
+                    onClick={(e) => { e.stopPropagation(); trackStudyAction("flashcards"); navigate(`/folder/${folder.id}/flashcards`); }}
+                  >🧠</button>
                   <button
                     className="folder-tool-btn folder-tool-btn--dev"
                     title="Preguntas a desarrollo"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      trackStudyAction("dev_questions");
-                      navigate(`/folder/${folder.id}/dev-questions`);
-                    }}
-                  >
-                    ✍️
-                  </button>
+                    onClick={(e) => { e.stopPropagation(); trackStudyAction("dev_questions"); navigate(`/folder/${folder.id}/dev-questions`); }}
+                  >✍️</button>
                   <button
                     className="folder-tool-btn folder-tool-btn--files"
                     title="Subir archivo"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUploadFile({ id: folder.id, name: folder.name });
-                    }}
-                  >
-                    📎
-                  </button>
+                    onClick={(e) => { e.stopPropagation(); onUploadFile({ id: folder.id, name: folder.name }); }}
+                  >📎</button>
                 </div>
               </div>
             );
@@ -1181,27 +1716,11 @@ function FoldersView({
           <div className="folder-detail-header">
             <h3>{folders.find((f) => f.id === selectedFolder)?.name || "Carpeta"}</h3>
             <div className="folder-actions">
-              <button className="btn-add-chat" onClick={() => setShowAddChat(!showAddChat)}>
-                + Agregar chat
-              </button>
-              <button
-                className="btn-upload-file"
-                onClick={() => {
-                  const folder = folders.find((f) => f.id === selectedFolder);
-                  onUploadFile({ id: selectedFolder, name: folder?.name || "Carpeta" });
-                }}
-              >
-                📎 Subir archivo
-              </button>
-              <button className="btn-flashcards" onClick={() => { trackStudyAction("flashcards"); navigate(`/folder/${selectedFolder}/flashcards`); }}>
-                🧠 Flashcards
-              </button>
-              <button className="btn-dev-questions" onClick={() => { trackStudyAction("dev_questions"); navigate(`/folder/${selectedFolder}/dev-questions`); }}>
-                ✍️ Desarrollo
-              </button>
-              <button className="btn-exam" onClick={() => generateExam(selectedFolder)}>
-                📄 Examen
-              </button>
+              <button className="btn-add-chat" onClick={() => setShowAddChat(!showAddChat)}>+ Agregar chat</button>
+              <button className="btn-upload-file" onClick={() => { const folder = folders.find((f) => f.id === selectedFolder); onUploadFile({ id: selectedFolder, name: folder?.name || "Carpeta" }); }}>📎 Subir archivo</button>
+              <button className="btn-flashcards" onClick={() => { trackStudyAction("flashcards"); navigate(`/folder/${selectedFolder}/flashcards`); }}>🧠 Flashcards</button>
+              <button className="btn-dev-questions" onClick={() => { trackStudyAction("dev_questions"); navigate(`/folder/${selectedFolder}/dev-questions`); }}>✍️ Desarrollo</button>
+              <button className="btn-exam" onClick={() => generateExam(selectedFolder)}>📄 Examen</button>
             </div>
           </div>
 
@@ -1209,65 +1728,44 @@ function FoldersView({
             <div className="add-chat-modal">
               <h4>Seleccioná un chat para agregar</h4>
               <div className="chat-selector">
-                {Array.isArray(allChats) &&
-                  allChats.map((chat) => {
-                    if (!chat || !(chat.chatId || chat.id)) return null;
-                    return (
-                      <div
-                        key={chat.chatId || chat.id}
-                        className="chat-selector-item"
-                        onClick={() => {
-                          assignChatToFolder(chat.chatId || chat.id, selectedFolder);
-                          setShowAddChat(false);
-                        }}
-                      >
-                        <div className="chat-selector-title">{chat.title || "Sin título"}</div>
-                        <div className="chat-selector-date">
-                          {chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ""}
-                        </div>
-                      </div>
-                    );
-                  })}
+                {Array.isArray(allChats) && allChats.map((chat) => {
+                  if (!chat || !(chat.chatId || chat.id)) return null;
+                  return (
+                    <div key={chat.chatId || chat.id} className="chat-selector-item"
+                      onClick={() => { assignChatToFolder(chat.chatId || chat.id, selectedFolder); setShowAddChat(false); }}>
+                      <div className="chat-selector-title">{chat.title || "Sin título"}</div>
+                      <div className="chat-selector-date">{chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ""}</div>
+                    </div>
+                  );
+                })}
               </div>
               <button onClick={() => setShowAddChat(false)}>Cerrar</button>
             </div>
           )}
 
-          {/* Files Panel */}
           <FolderFilesPanel
             key={`${selectedFolder}-${filesPanelRefresh[selectedFolder] || 0}`}
             folderId={selectedFolder}
             folderName={folders.find((f) => f.id === selectedFolder)?.name || "Carpeta"}
-            onUpload={() => {
-              const folder = folders.find((f) => f.id === selectedFolder);
-              onUploadFile({ id: selectedFolder, name: folder?.name || "Carpeta" });
-            }}
+            onUpload={() => { const folder = folders.find((f) => f.id === selectedFolder); onUploadFile({ id: selectedFolder, name: folder?.name || "Carpeta" }); }}
           />
 
           {isLoadingChats ? (
             <p>Cargando chats...</p>
           ) : (
             <div className="folder-chats">
-              {(!folderChats || folderChats.length === 0) && (
-                <p className="empty-state">Esta carpeta está vacía</p>
-              )}
-              {Array.isArray(folderChats) &&
-                folderChats.map((chat) => {
-                  if (!chat || !(chat.chatId || chat.id)) return null;
-                  return (
-                    <div
-                      key={chat.chatId || chat.id}
-                      className="folder-chat-item folder-chat-item--clickable"
-                      onClick={() => navigate(`/chat?id=${chat.chatId || chat.id}`)}
-                    >
-                      <div className="folder-chat-title">{chat.title || "Sin título"}</div>
-                      <div className="folder-chat-date">
-                        {chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ""}
-                      </div>
-                      <div className="folder-chat-arrow">→</div>
-                    </div>
-                  );
-                })}
+              {(!folderChats || folderChats.length === 0) && <p className="empty-state">Esta carpeta está vacía</p>}
+              {Array.isArray(folderChats) && folderChats.map((chat) => {
+                if (!chat || !(chat.chatId || chat.id)) return null;
+                return (
+                  <div key={chat.chatId || chat.id} className="folder-chat-item folder-chat-item--clickable"
+                    onClick={() => navigate(`/chat?id=${chat.chatId || chat.id}`)}>
+                    <div className="folder-chat-title">{chat.title || "Sin título"}</div>
+                    <div className="folder-chat-date">{chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ""}</div>
+                    <div className="folder-chat-arrow">→</div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1277,24 +1775,14 @@ function FoldersView({
 }
 
 // ── Progress View ───────────────────────────────────────────────────────────
-function ProgressView({
-  folders,
-  allChats,
-  totalOrganizedChats,
-  folderProgress,
-  folderStats,
-  selectedProgressFolder,
-  loadingProgressFolder,
-  onSelectFolder,
-}) {
+function ProgressView({ folders, allChats, totalOrganizedChats, folderProgress, folderStats, selectedProgressFolder, loadingProgressFolder, onSelectFolder }) {
   const stats = selectedProgressFolder ? folderStats[selectedProgressFolder] : null;
 
   function calcDevStats(devQuestions) {
     if (!devQuestions || devQuestions.length === 0) return { count: 0, avgScore: null };
-    const avgScore =
-      devQuestions.length > 0
-        ? Math.round((devQuestions.reduce((s, q) => s + (q.score || 0), 0) / devQuestions.length) * 10) / 10
-        : null;
+    const avgScore = devQuestions.length > 0
+      ? Math.round((devQuestions.reduce((s, q) => s + (q.score || 0), 0) / devQuestions.length) * 10) / 10
+      : null;
     return { count: devQuestions.length, avgScore };
   }
 
@@ -1302,7 +1790,6 @@ function ProgressView({
   const flashCount = stats ? stats.flashcards.length : null;
   const lastFlashcards = stats ? [...stats.flashcards].reverse().slice(0, 5) : [];
   const lastDevQuestions = stats ? [...stats.devQuestions].reverse().slice(0, 5) : [];
-
   const devScorePercent = devStats?.avgScore != null ? (devStats.avgScore / 10) * 100 : 0;
 
   function scoreColor(score) {
@@ -1331,19 +1818,14 @@ function ProgressView({
 
       <div className="progress-folders-section">
         <h3 className="progress-section-title">Progreso por carpeta</h3>
-        {folders.length === 0 && (
-          <p className="empty-state">Todavía no tenés carpetas.</p>
-        )}
+        {folders.length === 0 && <p className="empty-state">Todavía no tenés carpetas.</p>}
         <div className="progress-folder-list">
           {folders.map((folder) => {
             const pct = folderProgress[folder.id] ?? null;
             const isSelected = selectedProgressFolder === folder.id;
             return (
-              <div
-                key={folder.id}
-                className={`progress-folder-row ${isSelected ? "progress-folder-row--active" : ""}`}
-                onClick={() => onSelectFolder(folder.id)}
-              >
+              <div key={folder.id} className={`progress-folder-row ${isSelected ? "progress-folder-row--active" : ""}`}
+                onClick={() => onSelectFolder(folder.id)}>
                 <div className="progress-folder-row__left">
                   <span className="progress-folder-row__icon">📁</span>
                   <div className="progress-folder-row__info">
@@ -1353,17 +1835,9 @@ function ProgressView({
                 </div>
                 <div className="progress-folder-row__right">
                   <div className="progress-bar-wrap">
-                    <div
-                      className="progress-bar-fill"
-                      style={{
-                        width: pct != null ? `${pct}%` : "0%",
-                        transition: "width 900ms cubic-bezier(0.22,1,0.36,1)",
-                      }}
-                    />
+                    <div className="progress-bar-fill" style={{ width: pct != null ? `${pct}%` : "0%", transition: "width 900ms cubic-bezier(0.22,1,0.36,1)" }} />
                   </div>
-                  <span className="progress-folder-row__pct">
-                    {pct != null ? `${pct}%` : "…"}
-                  </span>
+                  <span className="progress-folder-row__pct">{pct != null ? `${pct}%` : "…"}</span>
                   <span className="progress-folder-row__arrow">{isSelected ? "▾" : "›"}</span>
                 </div>
               </div>
@@ -1381,7 +1855,6 @@ function ProgressView({
               <h3 className="progress-section-title">
                 {folders.find((f) => f.id === selectedProgressFolder)?.name || "Carpeta"}
               </h3>
-
               <div className="progress-detail-grid">
                 <div className="progress-detail-card progress-detail-card--flash">
                   <div className="progress-detail-card__header">
@@ -1402,13 +1875,9 @@ function ProgressView({
                           <div key={q.SK} className="progress-dev-answer-item">
                             <div className="progress-dev-answer-item__top">
                               <span className="progress-dev-answer-item__score" style={{ color: "#f97316" }}>✓</span>
-                              <span className="progress-dev-answer-item__date">
-                                {q.createdAt ? new Date(q.createdAt).toLocaleDateString("es-AR") : ""}
-                              </span>
+                              <span className="progress-dev-answer-item__date">{q.createdAt ? new Date(q.createdAt).toLocaleDateString("es-AR") : ""}</span>
                             </div>
-                            <p className="progress-dev-answer-item__question">
-                              {q.question?.replace(/\\[()\[\]]/g, "").slice(0, 90)}…
-                            </p>
+                            <p className="progress-dev-answer-item__question">{q.question?.replace(/\\[()\[\]]/g, "").slice(0, 90)}…</p>
                           </div>
                         ))}
                       </div>
@@ -1433,22 +1902,10 @@ function ProgressView({
                         <div className="progress-detail-score">
                           <div className="progress-detail-score__row">
                             <span className="progress-detail-score__label">Puntaje promedio</span>
-                            <span
-                              className="progress-detail-score__value"
-                              style={{ color: scoreColor(devStats.avgScore) }}
-                            >
-                              {devStats.avgScore}/10
-                            </span>
+                            <span className="progress-detail-score__value" style={{ color: scoreColor(devStats.avgScore) }}>{devStats.avgScore}/10</span>
                           </div>
                           <div className="progress-detail-score__bar-bg">
-                            <div
-                              className="progress-detail-score__bar-fill"
-                              style={{
-                                width: `${devScorePercent}%`,
-                                background: scoreColor(devStats.avgScore),
-                                transition: "width 900ms cubic-bezier(0.22,1,0.36,1)",
-                              }}
-                            />
+                            <div className="progress-detail-score__bar-fill" style={{ width: `${devScorePercent}%`, background: scoreColor(devStats.avgScore), transition: "width 900ms cubic-bezier(0.22,1,0.36,1)" }} />
                           </div>
                         </div>
                       )}
@@ -1457,19 +1914,10 @@ function ProgressView({
                         {lastDevQuestions.map((q) => (
                           <div key={q.SK} className="progress-dev-answer-item">
                             <div className="progress-dev-answer-item__top">
-                              <span
-                                className="progress-dev-answer-item__score"
-                                style={{ color: scoreColor(q.score) }}
-                              >
-                                {q.score}/10
-                              </span>
-                              <span className="progress-dev-answer-item__date">
-                                {q.createdAt ? new Date(q.createdAt).toLocaleDateString("es-AR") : ""}
-                              </span>
+                              <span className="progress-dev-answer-item__score" style={{ color: scoreColor(q.score) }}>{q.score}/10</span>
+                              <span className="progress-dev-answer-item__date">{q.createdAt ? new Date(q.createdAt).toLocaleDateString("es-AR") : ""}</span>
                             </div>
-                            <p className="progress-dev-answer-item__question">
-                              {q.question?.replace(/\\[()\[\]]/g, "").slice(0, 90)}…
-                            </p>
+                            <p className="progress-dev-answer-item__question">{q.question?.replace(/\\[()\[\]]/g, "").slice(0, 90)}…</p>
                           </div>
                         ))}
                       </div>
