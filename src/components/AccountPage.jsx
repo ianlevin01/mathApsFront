@@ -113,11 +113,11 @@ export default function AccountPage({ onLogout }) {
         }
       } catch { /* silencioso */ }
 
-      if (attempts >= 24) {
-        // 24 intentos × 5s = 2 minutos máximo, dejar de intentar
+      if (attempts >= 60) {
+        // 60 intentos × 10s = 10 minutos máximo, dejar de intentar
         clearInterval(pollRef.current);
       }
-    }, 5000);
+    }, 10000);
   }
 
   async function handleChangePassword(e) {
