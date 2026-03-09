@@ -201,6 +201,10 @@ export default function AccountPage({ onLogout }) {
     ? Math.min(100, Math.round((user.messagesUsed / user.messagesLimit) * 100)) : 0;
   const imgPct = user?.imagesLimit
     ? Math.min(100, Math.round((user.imagesUsed / user.imagesLimit) * 100)) : 0;
+  const foldersPct = user?.foldersLimit
+  ? Math.min(100, Math.round((user.foldersUsed / user.foldersLimit) * 100)) : 0;
+  const exercisesPct = user?.exercisesLimit
+  ? Math.min(100, Math.round((user.exercisesUsed / user.exercisesLimit) * 100)) : 0;
 
   const formatDate = (d) =>
     d ? new Date(d).toLocaleDateString("es-AR", { day: "numeric", month: "long", year: "numeric" }) : "—";
@@ -328,6 +332,37 @@ export default function AccountPage({ onLogout }) {
                 </div>
                 <span className="acc-usage-hint">{imgPct}% utilizado hoy</span>
               </div>
+              <div className="acc-usage-row" style={{ marginTop: "12px" }}>
+              <div className="acc-usage-label-row">
+                <span>Carpetas creadas</span>
+                <span className="acc-usage-count">
+                  <strong>{user?.foldersUsed ?? 0}</strong> / {user?.foldersLimit ?? 0}
+                </span>
+              </div>
+              <div className="acc-progress-track">
+                <div
+                  className={`acc-progress-bar ${foldersPct >= 90 ? "danger" : foldersPct >= 70 ? "warning" : ""}`}
+                  style={{ width: `${foldersPct}%` }}
+                />
+              </div>
+              <span className="acc-usage-hint">{foldersPct}% utilizado</span>
+            </div>
+
+            <div className="acc-usage-row" style={{ marginTop: "12px" }}>
+              <div className="acc-usage-label-row">
+                <span>Ejercicios generados</span>
+                <span className="acc-usage-count">
+                  <strong>{user?.exercisesUsed ?? 0}</strong> / {user?.exercisesLimit ?? 0}
+                </span>
+              </div>
+              <div className="acc-progress-track">
+                <div
+                  className={`acc-progress-bar ${exercisesPct >= 90 ? "danger" : exercisesPct >= 70 ? "warning" : ""}`}
+                  style={{ width: `${exercisesPct}%` }}
+                />
+              </div>
+              <span className="acc-usage-hint">{exercisesPct}% utilizado</span>
+            </div>
             </div>
 
             <div className="acc-card acc-card--plan" style={{ "--plan-color": planMeta.color }}>
