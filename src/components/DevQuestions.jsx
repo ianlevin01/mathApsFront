@@ -7,7 +7,7 @@ import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 import "../styles/devquestions.css";
 
-const API_BASE = "https://api.mathaps.online";
+const API_BASE = "http://localhost:3000";
 
 // Limpia y normaliza LaTeX antes de renderizar
 function cleanLatex(text) {

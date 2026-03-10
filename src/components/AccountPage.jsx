@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { getToken, getEmailFromToken, removeToken } from "../auth";
 import "../styles/account.css";
 
-const API_BASE = "https://api.mathaps.online";
+const API_BASE = "http://localhost:3000";
 
 const PLAN_META = {
   free: { label: "Free", color: "#8888aa", badge: "GRATIS", icon: "🔓" },
@@ -151,8 +151,8 @@ export default function AccountPage({ onLogout }) {
     setCancelLoading(true);
     try {
       const token = getToken();
-      const res = await fetch(`${API_BASE}/subscription/cancel`, {
-        method: "POST",
+      const res = await fetch(`${API_BASE}/webhook/cancel-subscription`, {
+        method: "DELETE",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ reason: cancelReason }),
       });
@@ -194,8 +194,14 @@ export default function AccountPage({ onLogout }) {
     </div>
   );
 
-  const plan     = user?.plan || "free";
-  const planMeta = PLAN_META[plan] || PLAN_META.free;
+const plan = user?.plan || "free";
+const isCancelled = user?.planStatus === "cancelled";
+
+const planMeta = isCancelled
+  ? PLAN_META.free
+  : (PLAN_META[plan] || PLAN_META.free);
+
+const realPlanMeta = PLAN_META[plan] || PLAN_META.free;
 
   const msgPct = user?.messagesLimit
     ? Math.min(100, Math.round((user.messagesUsed / user.messagesLimit) * 100)) : 0;
@@ -380,7 +386,7 @@ export default function AccountPage({ onLogout }) {
                   {planMeta.badge}
                 </span>
               </div>
-              {plan === "free" ? (
+              {plan === "free" || isCancelled ? (
                 <div className="acc-upgrade-prompt">
                   <p>Estás en el plan gratuito. Desbloqueá más mensajes e imágenes con Premium.</p>
                   <button className="acc-btn acc-btn--primary" onClick={() => navigate("/plans")}>
@@ -391,7 +397,9 @@ export default function AccountPage({ onLogout }) {
                 <>
                   <div className="acc-field-row">
                     <span className="acc-field-label">Próximo cobro</span>
-                    <span className="acc-field-value acc-field-value--highlight">{formatDate(user?.nextBillingDate)}</span>
+                    <span className="acc-field-value acc-field-value--highlight">
+                      {formatDate(user?.nextBillingDate)}
+                    </span>
                   </div>
                   <div className="acc-field-row">
                     <span className="acc-field-label">Monto</span>
@@ -434,10 +442,12 @@ export default function AccountPage({ onLogout }) {
               <>
                 <div className="acc-card">
                   <div className="acc-card-header">
-                    <span className="acc-card-icon">{planMeta.icon}</span>
-                    <h2>Plan {planMeta.label}</h2>
-                    <span className="acc-status-chip acc-status-chip--active">Activo</span>
-                  </div>
+                  <span className="acc-card-icon">{realPlanMeta.icon}</span>
+                  <h2>Plan {realPlanMeta.label}</h2>
+                  <span className={`acc-status-chip ${isCancelled ? "acc-status-chip--cancelled" : "acc-status-chip--active"}`}>
+                    {isCancelled ? "Cancelado" : "Activo"}
+                  </span>
+                </div>
                   <div className="acc-field-row">
                     <span className="acc-field-label">Precio</span>
                     <span className="acc-field-value">${PLAN_PRICE[plan] ?? "—"} / mes</span>
@@ -447,9 +457,13 @@ export default function AccountPage({ onLogout }) {
                     <span className="acc-field-value">{formatDate(user?.lastPaymentDate)}</span>
                   </div>
                   <div className="acc-field-row">
-                    <span className="acc-field-label">Próximo cobro</span>
-                    <span className="acc-field-value acc-field-value--highlight">{formatDate(user?.nextBillingDate)}</span>
-                  </div>
+                  <span className="acc-field-label">
+                    {isCancelled ? "Tu plan termina el" : "Próximo cobro"}
+                  </span>
+                  <span className="acc-field-value acc-field-value--highlight">
+                    {formatDate(user?.nextBillingDate)}
+                  </span>
+                </div>
                   <div className="acc-field-row">
                     <span className="acc-field-label">Mensajes diarios</span>
                     <span className="acc-field-value">{user?.messagesLimit} / día</span>
@@ -459,7 +473,16 @@ export default function AccountPage({ onLogout }) {
                     <span className="acc-field-value">{user?.imagesLimit} / día</span>
                   </div>
                 </div>
-
+                {isCancelled && (
+                <button
+                  className="acc-btn acc-btn--primary"
+                  style={{ marginTop: "16px" }}
+                  onClick={() => navigate("/plans")}
+                >
+                  Renovar suscripción →
+                </button>
+              )}
+                {!isCancelled && (
                 <div className="acc-card acc-card--danger">
                   <div className="acc-card-header">
                     <span className="acc-card-icon">⚠️</span>
@@ -479,6 +502,7 @@ export default function AccountPage({ onLogout }) {
                     Cancelar suscripción
                   </button>
                 </div>
+                )}
               </>
             )}
           </div>
