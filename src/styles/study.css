@@ -2981,3 +2981,91 @@
   text-align: right;
   flex-shrink: 0;
 }
+/* ─────────────────────────────────────────────────────────
+   AGREGAR al final de la sección FILE UPLOAD MODAL,
+   justo antes del comentario FOLDER FILES PANEL
+   ───────────────────────────────────────────────────────── */
+
+/* Usage bar */
+.file-usage-bar-wrap {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-usage-bar-skeleton {
+  height: 36px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+  background-size: 200% 100%;
+  border-radius: 10px;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.file-usage-bar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.file-usage-bar-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.40);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.file-usage-bar-count {
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: -0.01em;
+}
+
+.file-usage-bar-bg {
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.file-usage-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.file-usage-limit-warning {
+  font-size: 12px;
+  color: #f87171;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Section label hint ("· hasta 5 a la vez") */
+.file-upload-section-badge--hint {
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Disabled drop zone (limit reached) */
+.file-drop-zone--disabled {
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.file-drop-zone--disabled:hover {
+  transform: none;
+  border-color: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+}

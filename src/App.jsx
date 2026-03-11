@@ -20,6 +20,7 @@ import { getToken, removeToken } from "./auth.js";
 import { normalizeMath } from "./utils/mathUtils";
 import { interpretPlot } from "./utils/plotInterpreter";
 import VerifyEmail from "./components/VerifyEmail";
+import ResetPassword from "./components/ResetPassword";
 
 import "./App.css";
 import "./styles/dashboard.css";
@@ -201,6 +202,7 @@ export default function App() {
           <Route path="/folder/:folderId/flashcards" element={isAuthenticated ? <Flashcards /> : <Navigate to="/" replace />} />
           <Route path="/folder/:folderId/dev-questions" element={isAuthenticated ? <DevQuestions /> : <Navigate to="/" replace />} />
           <Route path="/plans" element={isAuthenticated ? <PlansPage /> : <Navigate to="/" replace />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/account" element={isAuthenticated ? <AccountPage onLogout={handleLogout} /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

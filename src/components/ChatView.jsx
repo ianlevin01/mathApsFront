@@ -10,6 +10,7 @@ import { interpretPlot } from "../utils/plotInterpreter";
 
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
+const MAX_CHARS = 2000;
 
 // ── Model Selector ──────────────────────────────────────────────────────────
 function ModelSelector({ models, selectedKey, onChange }) {
@@ -151,13 +152,16 @@ export default function ChatView() {
   const firstMessageRef = useRef(null);
   const isFirstMessage = useRef(true);
 
+  const charCount = problemText.length;
+  const isOverLimit = charCount >= MAX_CHARS;
+  const isNearLimit = charCount >= MAX_CHARS * 0.9;
+
   useEffect(() => {
     loadChats();
     loadFolders();
     loadModels();
   }, []);
 
-  // ← Al montar, si hay ?id en la URL cargamos ese chat directamente
   useEffect(() => {
     const chatId = searchParams.get("id");
     if (chatId) {
@@ -294,7 +298,6 @@ export default function ChatView() {
     }
   }
 
-  // ← Carga un chat y actualiza la URL para que al recargar vuelva al mismo
   async function loadChat(chatId) {
     try {
       const token = getToken?.() || "";
@@ -305,7 +308,6 @@ export default function ChatView() {
       const data = await res.json();
       setCurrentChatId(chatId);
 
-      // ← NUEVO: actualizar la URL sin recargar la página
       navigate(`/chat?id=${chatId}`, { replace: true });
 
       const processed = (data.messages || []).map((msg) => {
@@ -349,7 +351,7 @@ export default function ChatView() {
   }
 
   async function handleSolve() {
-    if (!problemText.trim()) return;
+    if (!problemText.trim() || isOverLimit) return;
 
     if (window.fbq) {
       window.fbq('trackCustom', 'StudyAction', { action_type: 'chat_message' });
@@ -442,7 +444,6 @@ export default function ChatView() {
               const newChatId = event.chat.chatId;
               setCurrentChatId(newChatId);
 
-              // ← NUEVO: actualizar la URL cuando se crea un chat nuevo
               navigate(`/chat?id=${newChatId}`, { replace: true });
 
               loadChats();
@@ -470,7 +471,6 @@ export default function ChatView() {
     }
   }
 
-  // ← Al iniciar chat nuevo, limpiar también la URL
   function startNewChat() {
     setCurrentChatId(null);
     setMessages([]);
@@ -481,7 +481,7 @@ export default function ChatView() {
     setNudgeDismissed(false);
     firstMessageRef.current = null;
     isFirstMessage.current = true;
-    navigate("/chat", { replace: true }); // ← NUEVO: limpiar ?id de la URL
+    navigate("/chat", { replace: true });
   }
 
   return (
@@ -635,20 +635,26 @@ export default function ChatView() {
           <div className="chat-input-wrap">
             <textarea
               value={problemText}
-              onChange={(e) => setProblemText(e.target.value)}
+              onChange={(e) => setProblemText(e.target.value.slice(0, MAX_CHARS))}
               onPaste={handlePaste}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSolve(); } }}
               rows={3}
               placeholder="Escribí tu problema matemático... (Enter para enviar)"
               disabled={isLoading}
+              maxLength={MAX_CHARS}
             />
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-            />
+            <div
+              className="char-counter"
+              style={{
+                fontSize: "0.75rem",
+                textAlign: "right",
+                padding: "2px 4px",
+                color: isOverLimit ? "#e53935" : isNearLimit ? "#e57373" : "#888",
+                fontWeight: isNearLimit ? "600" : "normal",
+              }}
+            >
+              {charCount}/{MAX_CHARS}
+            </div>
             <div className="chat-input-actions">
               <button type="button" className="btn-attach" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
                 📎
@@ -658,11 +664,22 @@ export default function ChatView() {
                 selectedKey={selectedModel}
                 onChange={setSelectedModel}
               />
-              <button onClick={handleSolve} disabled={isLoading || !problemText.trim()} className="btn-send">
+              <button
+                onClick={handleSolve}
+                disabled={isLoading || !problemText.trim() || isOverLimit}
+                className="btn-send"
+              >
                 {isLoading ? "..." : "Enviar"}
               </button>
             </div>
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+          />
         </div>
       </div>
     </div>

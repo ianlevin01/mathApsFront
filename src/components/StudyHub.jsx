@@ -214,10 +214,11 @@ function QuickAssignModal({ chat, folders, onAssign, onClose }) {
 
 // ── File Upload Modal ───────────────────────────────────────────────────────
 const MODAL_FILES_PAGE_SIZE = 4;
+const MAX_FILES_PER_UPLOAD = 5;
 
 function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
   const [isDragging, setIsDragging] = useState(false);
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -228,7 +229,31 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
   const [visibleCount, setVisibleCount] = useState(MODAL_FILES_PAGE_SIZE);
   const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => { loadExistingFiles(); }, [folderId]);
+  // ── Usage: { used, limit, available, plan }
+  const [usage, setUsage] = useState(null);
+  const [loadingUsage, setLoadingUsage] = useState(true);
+
+  useEffect(() => {
+    loadExistingFiles();
+    loadUsage();
+  }, [folderId]);
+
+  async function loadUsage() {
+    setLoadingUsage(true);
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/${folderId}/files/usage`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setUsage(data);
+    } catch {
+      setUsage(null);
+    } finally {
+      setLoadingUsage(false);
+    }
+  }
 
   async function loadExistingFiles() {
     setLoadingFiles(true);
@@ -257,6 +282,10 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
       });
       if (!res.ok) throw new Error();
       setExistingFiles((prev) => prev.filter((f) => f.fileId !== fileId));
+      // Actualizar usage localmente al eliminar
+      setUsage((prev) =>
+        prev ? { ...prev, used: prev.used - 1, available: prev.available + 1 } : prev
+      );
     } catch (err) {
       console.error("Error al eliminar archivo", err);
     } finally {
@@ -264,14 +293,57 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
     }
   }
 
+  // Cuántos puede subir: limitado por disponibles del plan Y por el máximo por vez
+  const availableSlots = usage ? Math.min(usage.available, MAX_FILES_PER_UPLOAD) : MAX_FILES_PER_UPLOAD;
+  const limitReached = usage ? usage.available <= 0 : false;
+
   function handleDragOver(e) { e.preventDefault(); setIsDragging(true); }
   function handleDragLeave(e) { e.preventDefault(); setIsDragging(false); }
+
   function handleDrop(e) {
-    e.preventDefault(); setIsDragging(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped) setFile(dropped);
+    e.preventDefault();
+    setIsDragging(false);
+    if (limitReached) return;
+    validateAndSetFiles(Array.from(e.dataTransfer.files));
   }
-  function handleFileInput(e) { if (e.target.files[0]) setFile(e.target.files[0]); }
+
+  function handleFileInput(e) {
+    validateAndSetFiles(Array.from(e.target.files));
+    e.target.value = "";
+  }
+
+  function validateAndSetFiles(selected) {
+    if (limitReached) {
+      setError(`Alcanzaste el límite de tu plan (${usage.limit} archivos por carpeta). Eliminá alguno o mejorá tu plan.`);
+      return;
+    }
+    if (selected.length > availableSlots) {
+      setError(
+        `Solo podés subir ${availableSlots} archivo${availableSlots !== 1 ? "s" : ""} más en esta carpeta (límite del plan: ${usage?.limit ?? "—"}).`
+      );
+      return;
+    }
+    if (selected.length > MAX_FILES_PER_UPLOAD) {
+      setError(`Máximo ${MAX_FILES_PER_UPLOAD} archivos por vez.`);
+      return;
+    }
+    const MAX_BYTES = 5 * 1024 * 1024;
+    const oversized = selected.filter((f) => f.size > MAX_BYTES);
+    if (oversized.length > 0) {
+      setError(
+        oversized.length === 1
+          ? `"${oversized[0].name}" supera el límite de 5MB.`
+          : `${oversized.length} archivos superan el límite de 5MB: ${oversized.map((f) => f.name).join(", ")}.`
+      );
+      return;
+    }
+    setError(null);
+    setFiles(selected);
+  }
+
+  function removeFile(index) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
 
   function getFileIcon(name) {
     if (!name) return "📄";
@@ -292,30 +364,57 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
   }
 
   async function handleUpload() {
-    if (!file) return;
+    if (files.length === 0) return;
     setUploading(true);
     setError(null);
     try {
       const token = getToken?.() || "";
       const formData = new FormData();
-      formData.append("file", file);
+      files.forEach((f) => formData.append("files", f));
+
       const res = await fetch(`${API_BASE}/folder/${folderId}/files`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
-      if (!res.ok) throw new Error("Error al subir el archivo");
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        if (errData.usage) setUsage(errData.usage);
+        if (errData.error === "FILES_LIMIT_REACHED") {
+          throw new Error(`Límite de archivos alcanzado. Tu plan permite ${errData.usage?.limit ?? "—"} archivos por carpeta.`);
+        }
+        throw new Error(errData.error || "Error al subir los archivos");
+      }
+
       const data = await res.json();
       setSuccess(true);
-      setExistingFiles((prev) => [{ fileId: data.fileId, name: file.name, folderId }, ...prev]);
+
+      const uploaded = Array.isArray(data.files) ? data.files : [data];
+      setExistingFiles((prev) => [
+        ...uploaded.map((u, i) => ({
+          fileId: u.fileId,
+          name: files[i]?.name || u.fileId,
+          folderId,
+        })),
+        ...prev,
+      ]);
+
+      // Actualizar usage localmente al subir
+      setUsage((prev) =>
+        prev
+          ? { ...prev, used: prev.used + uploaded.length, available: Math.max(0, prev.available - uploaded.length) }
+          : prev
+      );
+
       setTimeout(() => {
-        onUploaded(data.fileId);
-        setFile(null);
+        uploaded.forEach((u) => onUploaded(u.fileId));
+        setFiles([]);
         setSuccess(false);
         setError(null);
       }, 1200);
     } catch (err) {
-      setError(err.message || "Error al subir el archivo");
+      setError(err.message || "Error al subir los archivos");
     } finally {
       setUploading(false);
     }
@@ -323,6 +422,14 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
 
   const visibleFiles = existingFiles.slice(0, visibleCount);
   const hiddenCount = existingFiles.length - visibleCount;
+
+  function usageBarColor() {
+    if (!usage) return "rgba(255,255,255,0.15)";
+    const pct = usage.used / usage.limit;
+    if (pct >= 1) return "#ef4444";
+    if (pct >= 0.8) return "#f97316";
+    return "rgba(255,255,255,0.5)";
+  }
 
   return (
     <div className="file-upload-overlay" onClick={onClose}>
@@ -341,51 +448,108 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
         </div>
 
         <div className="file-upload-body">
-          <div className="file-upload-section-label">Subir nuevo archivo</div>
-          {!file ? (
+
+          {/* ── BARRA DE USO ── */}
+          <div className="file-usage-bar-wrap">
+            {loadingUsage ? (
+              <div className="file-usage-bar-skeleton" />
+            ) : usage ? (
+              <>
+                <div className="file-usage-bar-header">
+                  <span className="file-usage-bar-label">Archivos en esta carpeta</span>
+                  <span className="file-usage-bar-count">
+                    {usage.used} / {usage.limit}
+                  </span>
+                </div>
+                <div className="file-usage-bar-bg">
+                  <div
+                    className="file-usage-bar-fill"
+                    style={{
+                      width: `${Math.min(100, (usage.used / usage.limit) * 100)}%`,
+                      background: usageBarColor(),
+                      transition: "width 600ms cubic-bezier(0.22,1,0.36,1)",
+                    }}
+                  />
+                </div>
+                {limitReached && (
+                  <p className="file-usage-limit-warning">
+                    ⚠️ Límite alcanzado. Eliminá archivos o mejorá tu plan para subir más.
+                  </p>
+                )}
+              </>
+            ) : null}
+          </div>
+
+          <div className="file-upload-section-label">
+            Subir archivos
+            {!loadingUsage && usage && !limitReached && (
+              <span className="file-upload-section-badge--hint">
+                {" "}· hasta {MAX_FILES_PER_UPLOAD} a la vez
+              </span>
+            )}
+          </div>
+
+          {/* ── DROP ZONE o PREVIEWS ── */}
+          {files.length === 0 ? (
             <div
-              className={`file-drop-zone ${isDragging ? "file-drop-zone--active" : ""}`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => inputRef.current?.click()}
+              className={`file-drop-zone ${isDragging ? "file-drop-zone--active" : ""} ${limitReached ? "file-drop-zone--disabled" : ""}`}
+              onDragOver={!limitReached ? handleDragOver : undefined}
+              onDragLeave={!limitReached ? handleDragLeave : undefined}
+              onDrop={!limitReached ? handleDrop : undefined}
+              onClick={!limitReached ? () => inputRef.current?.click() : undefined}
             >
               <input
                 ref={inputRef}
                 type="file"
                 style={{ display: "none" }}
                 onChange={handleFileInput}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.zip"
+                accept=".pdf"
+                multiple
+                disabled={limitReached}
               />
-              <div className="file-drop-zone__icon">{isDragging ? "✨" : "☁️"}</div>
+              <div className="file-drop-zone__icon">
+                {limitReached ? "🔒" : isDragging ? "✨" : "☁️"}
+              </div>
               <p className="file-drop-zone__title">
-                {isDragging ? "Soltá el archivo acá" : "Arrastrá o hacé clic para subir"}
+                {limitReached
+                  ? "Límite de archivos alcanzado"
+                  : isDragging
+                  ? "Soltá los archivos acá"
+                  : "Arrastrá o hacé clic para subir"}
               </p>
-              <p className="file-drop-zone__sub">PDF, Word, Excel, imágenes y más</p>
-              <button
-                className="file-drop-zone__btn"
-                onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
-                type="button"
-              >
-                Seleccionar archivo
-              </button>
+              <p className="file-drop-zone__sub">
+                {limitReached
+                  ? `Tu plan permite ${usage?.limit ?? "—"} archivos por carpeta`
+                  : `Solo PDFs · hasta ${availableSlots} archivo${availableSlots !== 1 ? "s" : ""} más`}
+              </p>
+              {!limitReached && (
+                <button
+                  className="file-drop-zone__btn"
+                  onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+                  type="button"
+                >
+                  Seleccionar archivos
+                </button>
+              )}
             </div>
           ) : (
             <div className="file-preview">
-              <div className="file-preview__card">
-                <div className="file-preview__icon">{getFileIcon(file.name)}</div>
-                <div className="file-preview__info">
-                  <p className="file-preview__name">{file.name}</p>
-                  <p className="file-preview__size">{formatSize(file.size)}</p>
+              {files.map((f, i) => (
+                <div key={i} className="file-preview__card">
+                  <div className="file-preview__icon">{getFileIcon(f.name)}</div>
+                  <div className="file-preview__info">
+                    <p className="file-preview__name">{f.name}</p>
+                    <p className="file-preview__size">{formatSize(f.size)}</p>
+                  </div>
+                  {!uploading && !success && (
+                    <button className="file-preview__remove" onClick={() => removeFile(i)}>✕</button>
+                  )}
                 </div>
-                {!uploading && !success && (
-                  <button className="file-preview__remove" onClick={() => setFile(null)}>✕</button>
-                )}
-              </div>
+              ))}
               {success && (
                 <div className="file-upload-success">
                   <span className="file-upload-success__icon">✅</span>
-                  <span>¡Archivo subido con éxito!</span>
+                  <span>¡{files.length > 1 ? `${files.length} archivos subidos` : "Archivo subido"} con éxito!</span>
                 </div>
               )}
               {uploading && (
@@ -397,7 +561,11 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
             </div>
           )}
 
-          {file && (
+          {files.length === 0 && error && (
+            <p className="file-upload-error">{error}</p>
+          )}
+
+          {files.length > 0 && (
             <button
               className="file-upload-confirm file-upload-confirm--inline"
               onClick={handleUpload}
@@ -408,7 +576,7 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
                   <span className="file-upload-spinner" />
                   Subiendo…
                 </span>
-              ) : success ? "¡Listo! 🎉" : "Subir archivo"}
+              ) : success ? "¡Listo! 🎉" : `Subir ${files.length > 1 ? `${files.length} archivos` : "archivo"}`}
             </button>
           )}
 
@@ -545,7 +713,7 @@ function FolderFilesPanel({ folderId, folderName, onUpload }) {
           )}
         </div>
         <button className="folder-files-panel__upload-btn" onClick={onUpload} type="button">
-          <span>+</span> Subir archivo
+          <span>+</span> Subir archivos
         </button>
       </div>
 
@@ -600,27 +768,16 @@ function FolderFilesPanel({ folderId, folderName, onUpload }) {
   );
 }
 
-// ── LaTeX rendering helpers (copiados de Flashcards.jsx y DevQuestions.jsx) ─
+// ── LaTeX rendering helpers ─────────────────────────────────────────────────
 function normalizeMathForExam(text) {
   if (!text) return "";
   let t = text;
-  // \[ ... \] → $$ ... $$
   t = t.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
-  // \( ... \) → $ ... $
   t = t.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner) => `$${inner}$`);
-  // \begin{...} suelto → $$ ... $$
   t = t.replace(/((?<!\$)\s*)(\\begin\{[^}]+\}[\s\S]*?\\end\{[^}]+\})/g, (match, pre, latex) => `${pre}$$${latex}$$`);
   return t;
 }
 
-// Renderiza texto con LaTeX inline. Usa ReactMarkdown + remark-math + rehype-katex
-// igual que en Flashcards.jsx y DevQuestions.jsx.
-// IMPORTANTE: estos imports deben estar en el archivo (ya los tenés en los otros componentes).
-// Si no los tenés en StudyHub, agregá al tope del archivo:
-//   import ReactMarkdown from "react-markdown";
-//   import remarkMath from "remark-math";
-//   import rehypeKatex from "rehype-katex";
-//   import "katex/dist/katex.min.css";
 function ExamMathText({ children, className, block = false }) {
   const processed = normalizeMathForExam(children ?? "");
   const Tag = block ? "div" : "span";
@@ -640,27 +797,19 @@ function ExamMathText({ children, className, block = false }) {
 }
 
 // ── Daily Exam Modal ────────────────────────────────────────────────────────
-// Flujo: pick_folder → flashcard_loading → flashcards (3) → dev_loading → dev → done
 const DAILY_FC_COUNT = 3;
 
 function DailyExamModal({ folders, onClose, onCompleted }) {
-  // step: pick_folder | flashcard_loading | flashcards | dev_loading | dev | done
   const [step, setStep] = useState("pick_folder");
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [folderName, setFolderName] = useState("");
-
-  // Progress tracking
   const [progressBefore, setProgressBefore] = useState(null);
   const [progressAfter, setProgressAfter] = useState(null);
-
-  // Flashcards state — manejamos un array de 3 cards
-  const [flashcards, setFlashcards] = useState([]);        // array de cards
-  const [fcIndex, setFcIndex] = useState(0);               // card actual (0-2)
-  const [fcSelected, setFcSelected] = useState(null);      // opción elegida en la card actual
+  const [flashcards, setFlashcards] = useState([]);
+  const [fcIndex, setFcIndex] = useState(0);
+  const [fcSelected, setFcSelected] = useState(null);
   const [fcAnswered, setFcAnswered] = useState(false);
-  const [fcResults, setFcResults] = useState([]);          // { card, isCorrect }
-
-  // Dev question state
+  const [fcResults, setFcResults] = useState([]);
   const [devQuestion, setDevQuestion] = useState(null);
   const [devAnswer, setDevAnswer] = useState("");
   const [devCorrection, setDevCorrection] = useState(null);
@@ -669,7 +818,6 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
 
   const scoreColor = (s) => s >= 7 ? "#22c55e" : s >= 5 ? "#f97316" : "#ef4444";
 
-  // ── Fetch progress helper
   async function fetchProgress(folderId) {
     try {
       const token = getToken?.() || "";
@@ -683,16 +831,12 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
     } catch { return null; }
   }
 
-  // ── Pick folder → fetch progress + load 3 flashcards
   async function pickFolder(folderId, name) {
     setSelectedFolder(folderId);
     setFolderName(name);
     setStep("flashcard_loading");
-
-    // Fetch progress BEFORE exam
     const pBefore = await fetchProgress(folderId);
     setProgressBefore(pBefore);
-
     try {
       const token = getToken?.() || "";
       const res = await fetch(`${API_BASE}/folder/${folderId}/flashcards`, {
@@ -713,7 +857,6 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
     }
   }
 
-  // ── Current flashcard
   const currentCard = flashcards[fcIndex] ?? null;
 
   function handleFcSelect(optionId) {
@@ -725,7 +868,6 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
   }
 
   async function handleFcNext() {
-    // Save correct flashcards (non-blocking)
     const lastResult = fcResults[fcResults.length - 1];
     if (lastResult?.isCorrect && currentCard) {
       const token = getToken?.() || "";
@@ -735,15 +877,12 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
         body: JSON.stringify({ flashcards: [{ question: currentCard.question, correctId: currentCard.correctId }] }),
       }).catch(() => {});
     }
-
     const nextIndex = fcIndex + 1;
     if (nextIndex < flashcards.length) {
-      // Siguiente flashcard
       setFcIndex(nextIndex);
       setFcSelected(null);
       setFcAnswered(false);
     } else {
-      // Terminaron todas las flashcards → cargar dev question
       setStep("dev_loading");
       try {
         const token = getToken?.() || "";
@@ -772,17 +911,11 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
       const res = await fetch(`${API_BASE}/folder/${selectedFolder}/dev-questions/correct`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          question: devQuestion.question,
-          context: devQuestion.context,
-          answer: devAnswer,
-        }),
+        body: JSON.stringify({ question: devQuestion.question, context: devQuestion.context, answer: devAnswer }),
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
       setDevCorrection(data);
-
-      // Fetch progress AFTER correction (non-blocking, update state when ready)
       fetchProgress(selectedFolder).then((pAfter) => setProgressAfter(pAfter));
     } catch {
       setDevError("No se pudo corregir. Intentá de nuevo.");
@@ -803,24 +936,17 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
     onClose();
   }
 
-  // ── Step indicator logic
   const fcPhases = ["pick_folder", "flashcard_loading", "flashcards"];
   const devPhases = ["dev_loading", "dev"];
   const fcDone = !fcPhases.includes(step);
   const devDone = step === "done";
   const fcActive = fcPhases.includes(step);
   const devActive = devPhases.includes(step);
-
-  // Progress delta
-  const progressDelta = progressAfter != null && progressBefore != null
-    ? Math.round(progressAfter - progressBefore)
-    : null;
+  const progressDelta = progressAfter != null && progressBefore != null ? Math.round(progressAfter - progressBefore) : null;
 
   return (
     <div className="daily-exam-overlay" onClick={onClose}>
       <div className="daily-exam-modal" onClick={(e) => e.stopPropagation()}>
-
-        {/* Header */}
         <div className="daily-exam-header">
           <div className="daily-exam-header__left">
             <div className="daily-exam-flame-icon">🔥</div>
@@ -832,7 +958,6 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
           <button className="daily-exam-close" onClick={onClose}>✕</button>
         </div>
 
-        {/* Step indicator: solo 2 pasos visibles — Flashcards y Desarrollo */}
         <div className="daily-exam-steps">
           <div className={`daily-exam-step ${fcActive ? "active" : ""} ${fcDone ? "done" : ""}`}>
             <span className="daily-exam-step__dot">{fcDone ? "✓" : "🧠"}</span>
@@ -856,8 +981,6 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
         </div>
 
         <div className="daily-exam-body">
-
-          {/* ── PICK FOLDER ── */}
           {step === "pick_folder" && (
             <div className="daily-exam-pick">
               <p className="daily-exam-pick__title">¿De qué carpeta querés estudiar hoy?</p>
@@ -878,7 +1001,6 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
             </div>
           )}
 
-          {/* ── LOADING ── */}
           {(step === "flashcard_loading" || step === "dev_loading") && (
             <div className="daily-exam-loading">
               <div className="daily-exam-spinner" />
@@ -888,29 +1010,18 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
             </div>
           )}
 
-          {/* ── FLASHCARDS (3 en secuencia) ── */}
           {step === "flashcards" && currentCard && (
             <div className="daily-exam-fc">
-              {/* Mini progress bar para las 3 flashcards */}
               <div className="daily-exam-fc-progress">
                 {flashcards.map((_, i) => (
-                  <div
-                    key={i}
-                    className={`daily-exam-fc-pip ${
-                      i < fcIndex ? (fcResults[i]?.isCorrect ? "daily-exam-fc-pip--correct" : "daily-exam-fc-pip--wrong")
-                      : i === fcIndex ? "daily-exam-fc-pip--active"
-                      : ""
-                    }`}
-                  />
+                  <div key={i} className={`daily-exam-fc-pip ${
+                    i < fcIndex ? (fcResults[i]?.isCorrect ? "daily-exam-fc-pip--correct" : "daily-exam-fc-pip--wrong")
+                    : i === fcIndex ? "daily-exam-fc-pip--active" : ""
+                  }`} />
                 ))}
               </div>
-
               <p className="daily-exam-section-label">🧠 Flashcard {fcIndex + 1} de {flashcards.length}</p>
-
-              <ExamMathText className="daily-exam-question" block>
-                {currentCard.question}
-              </ExamMathText>
-
+              <ExamMathText className="daily-exam-question" block>{currentCard.question}</ExamMathText>
               <div className="daily-exam-options">
                 {currentCard.options.map((opt) => {
                   let cls = "daily-exam-option";
@@ -929,7 +1040,6 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
                   );
                 })}
               </div>
-
               {fcAnswered && (
                 <>
                   <div className={`daily-exam-feedback ${fcSelected === currentCard.correctId ? "daily-exam-feedback--correct" : "daily-exam-feedback--wrong"}`}>
@@ -946,14 +1056,12 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
             </div>
           )}
 
-          {/* ── DEV QUESTION ── */}
           {step === "dev" && (
             <div className="daily-exam-dev">
               <p className="daily-exam-section-label">✍️ Pregunta a desarrollo</p>
               {devQuestion ? (
                 <>
                   <ExamMathText className="daily-exam-question" block>{devQuestion.question}</ExamMathText>
-
                   {!devCorrection ? (
                     <div className="daily-exam-answer-wrap">
                       <textarea
@@ -988,20 +1096,16 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
                           {devCorrection.score >= 7 ? "🎉 Excelente" : devCorrection.score >= 5 ? "👍 Bien" : "📖 Revisar"}
                         </span>
                       </div>
-
                       <div className="daily-exam-correction-section">
                         <span className="daily-exam-correction-label">Corrección de la IA</span>
                         <ExamMathText className="daily-exam-correction-text" block>{devCorrection.feedback}</ExamMathText>
                       </div>
-
                       {devCorrection.modelAnswer && (
                         <div className="daily-exam-correction-section">
                           <span className="daily-exam-correction-label">Respuesta modelo</span>
                           <ExamMathText className="daily-exam-correction-text" block>{devCorrection.modelAnswer}</ExamMathText>
                         </div>
                       )}
-
-                      {/* ── Progress delta ── */}
                       {progressBefore != null && (
                         <div className="daily-exam-progress-delta">
                           <div className="daily-exam-progress-delta__header">
@@ -1020,8 +1124,7 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
                             <div className="daily-exam-progress-delta__bar-row">
                               <span className="daily-exam-progress-delta__bar-label">Antes</span>
                               <div className="daily-exam-progress-delta__bar-bg">
-                                <div className="daily-exam-progress-delta__bar-fill daily-exam-progress-delta__bar-fill--before"
-                                  style={{ width: `${progressBefore}%` }} />
+                                <div className="daily-exam-progress-delta__bar-fill daily-exam-progress-delta__bar-fill--before" style={{ width: `${progressBefore}%` }} />
                               </div>
                               <span className="daily-exam-progress-delta__pct">{progressBefore}%</span>
                             </div>
@@ -1038,7 +1141,6 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
                           </div>
                         </div>
                       )}
-
                       <button className="daily-exam-finish-btn" onClick={handleFinish}>
                         🔥 ¡Completar examen y mantener racha!
                       </button>
@@ -1048,14 +1150,11 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
               ) : (
                 <div className="daily-exam-no-question">
                   <p>No se pudo generar una pregunta para esta carpeta.</p>
-                  <button className="daily-exam-finish-btn" onClick={handleFinish}>
-                    🔥 Completar de todas formas
-                  </button>
+                  <button className="daily-exam-finish-btn" onClick={handleFinish}>🔥 Completar de todas formas</button>
                 </div>
               )}
             </div>
           )}
-
         </div>
       </div>
     </div>
@@ -1066,9 +1165,7 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
 function StreakCard({ racha, onStartExam, loading }) {
   const dias = racha?.dias ?? 0;
   const completadoHoy = racha?.completadoHoy ?? false;
-  const horasSiguiente = racha?.horasParaPerder ?? null; // hs restantes antes de perder racha
-
-  // Flame intensity based on streak
+  const horasSiguiente = racha?.horasParaPerder ?? null;
   const flameClass = dias === 0 ? "" : dias < 3 ? "streak-card__flame--warm" : dias < 7 ? "streak-card__flame--hot" : "streak-card__flame--inferno";
 
   function formatCountdown(hs) {
@@ -1087,19 +1184,13 @@ function StreakCard({ racha, onStartExam, loading }) {
   return (
     <div className={`streak-card ${isUrgent ? "streak-card--urgent" : ""} ${completadoHoy ? "streak-card--done" : ""}`}>
       <div className="streak-card__glow" />
-
-      {/* Flame + days */}
       <div className="streak-card__left">
-        <div className={`streak-card__flame ${flameClass}`}>
-          🔥
-        </div>
+        <div className={`streak-card__flame ${flameClass}`}>🔥</div>
         <div className="streak-card__days-wrap">
           <span className="streak-card__days">{dias}</span>
           <span className="streak-card__days-label">días de racha</span>
         </div>
       </div>
-
-      {/* Center: info */}
       <div className="streak-card__center">
         {completadoHoy ? (
           <>
@@ -1126,8 +1217,6 @@ function StreakCard({ racha, onStartExam, loading }) {
           </>
         )}
       </div>
-
-      {/* CTA */}
       <div className="streak-card__right">
         {!completadoHoy && (
           <button
@@ -1171,8 +1260,6 @@ export default function StudyHub() {
   const [loadingProgressFolder, setLoadingProgressFolder] = useState(false);
   const [uploadModalFolder, setUploadModalFolder] = useState(null);
   const [filesPanelRefresh, setFilesPanelRefresh] = useState({});
-
-  // ── Racha state
   const [racha, setRacha] = useState(null);
   const [rachaLoading, setRachaLoading] = useState(true);
   const [showDailyExam, setShowDailyExam] = useState(false);
@@ -1201,13 +1288,12 @@ export default function StudyHub() {
   }
 
   function handleExamCompleted() {
-    // Optimistically update racha
     setRacha((prev) => ({
       ...prev,
       completadoHoy: true,
       dias: (prev?.dias ?? 0) + (prev?.completadoHoy ? 0 : 1),
     }));
-    loadRacha(); // re-fetch from server
+    loadRacha();
   }
 
   async function loadFolderProgressBatch(folderList) {
@@ -1224,8 +1310,7 @@ export default function StudyHub() {
     const progressMap = {};
     folderList.forEach((folder, i) => {
       const result = results[i];
-      progressMap[folder.id] =
-        result.status === "fulfilled" ? (result.value.percentage ?? 0) : 0;
+      progressMap[folder.id] = result.status === "fulfilled" ? (result.value.percentage ?? 0) : 0;
     });
     setFolderProgress(progressMap);
   }
@@ -1416,7 +1501,6 @@ export default function StudyHub() {
       {showCreatePopup && (
         <CreateFolderPopup onClose={() => setShowCreatePopup(false)} onCreate={createFolder} />
       )}
-
       {quickAssignChat && (
         <QuickAssignModal
           chat={allChats.find((c) => (c.chatId || c.id) === quickAssignChat)}
@@ -1425,7 +1509,6 @@ export default function StudyHub() {
           onClose={() => setQuickAssignChat(null)}
         />
       )}
-
       {pickFolderMode && (
         <PickFolderModal
           mode={pickFolderMode}
@@ -1438,7 +1521,6 @@ export default function StudyHub() {
           onClose={() => setPickFolderMode(null)}
         />
       )}
-
       {uploadModalFolder && (
         <FileUploadModal
           folderId={uploadModalFolder.id}
@@ -1450,7 +1532,6 @@ export default function StudyHub() {
           }}
         />
       )}
-
       {showDailyExam && (
         <DailyExamModal
           folders={foldersWithCounts}
@@ -1459,7 +1540,6 @@ export default function StudyHub() {
         />
       )}
 
-      {/* Header */}
       <div className="study-header">
         <button className="btn-back" onClick={() => navigate("/dashboard")}>← Dashboard</button>
         <div className="study-header-text">
@@ -1468,13 +1548,8 @@ export default function StudyHub() {
         </div>
       </div>
 
-      {/* ── STREAK CARD ── */}
       {!rachaLoading && (
-        <StreakCard
-          racha={racha}
-          onStartExam={() => setShowDailyExam(true)}
-          loading={rachaLoading}
-        />
+        <StreakCard racha={racha} onStartExam={() => setShowDailyExam(true)} loading={rachaLoading} />
       )}
       {rachaLoading && (
         <div className="streak-card streak-card--skeleton">
@@ -1486,37 +1561,28 @@ export default function StudyHub() {
         </div>
       )}
 
-      {/* Tools strip */}
       <div className="study-tools-strip">
         <div className="study-tool-card study-tool-card--chat" onClick={() => navigate("/chat")}>
           <div className="study-tool-card__glow" />
-          <div className="study-tool-card__icon-wrap">
-            <span className="study-tool-card__icon">📐</span>
-          </div>
+          <div className="study-tool-card__icon-wrap"><span className="study-tool-card__icon">📐</span></div>
           <div className="study-tool-card__text">
             <span className="study-tool-card__title">Chat Matemático</span>
             <span className="study-tool-card__sub">Resolvé problemas con IA paso a paso</span>
           </div>
           <span className="study-tool-card__arrow">→</span>
         </div>
-
         <div className="study-tool-card study-tool-card--flash" onClick={() => { trackStudyAction("flashcards"); setPickFolderMode("flashcards"); }}>
           <div className="study-tool-card__glow" />
-          <div className="study-tool-card__icon-wrap">
-            <span className="study-tool-card__icon">🧠</span>
-          </div>
+          <div className="study-tool-card__icon-wrap"><span className="study-tool-card__icon">🧠</span></div>
           <div className="study-tool-card__text">
             <span className="study-tool-card__title">Flashcards</span>
             <span className="study-tool-card__sub">Practicá con preguntas de opción múltiple</span>
           </div>
           <span className="study-tool-card__arrow">→</span>
         </div>
-
         <div className="study-tool-card study-tool-card--dev" onClick={() => { trackStudyAction("dev_questions"); setPickFolderMode("dev-questions"); }}>
           <div className="study-tool-card__glow" />
-          <div className="study-tool-card__icon-wrap">
-            <span className="study-tool-card__icon">✍️</span>
-          </div>
+          <div className="study-tool-card__icon-wrap"><span className="study-tool-card__icon">✍️</span></div>
           <div className="study-tool-card__text">
             <span className="study-tool-card__title">Preguntas a desarrollo</span>
             <span className="study-tool-card__sub">Escribí y recibí corrección con IA</span>
@@ -1525,7 +1591,6 @@ export default function StudyHub() {
         </div>
       </div>
 
-      {/* Stats row */}
       <div className="study-stats-row">
         <div className="study-stat">
           <span className="study-stat__value">{allChats.length}</span>
@@ -1548,18 +1613,11 @@ export default function StudyHub() {
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="study-tabs">
-        <button
-          className={`study-tab ${view === "folders" ? "active" : ""}`}
-          onClick={() => setView("folders")}
-        >
+        <button className={`study-tab ${view === "folders" ? "active" : ""}`} onClick={() => setView("folders")}>
           📁 Carpetas
         </button>
-        <button
-          className={`study-tab ${view === "progress" ? "active" : ""}`}
-          onClick={() => setView("progress")}
-        >
+        <button className={`study-tab ${view === "progress" ? "active" : ""}`} onClick={() => setView("progress")}>
           📊 Progreso
         </button>
       </div>
@@ -1598,7 +1656,6 @@ export default function StudyHub() {
         )}
       </div>
 
-      {/* Upgrade Banner */}
       <div className="study-upgrade-banner" onClick={() => navigate("/plans")}>
         <div className="study-upgrade-banner__glow" />
         <div className="study-upgrade-banner__left">
@@ -1638,9 +1695,7 @@ function FoldersView({
         <div className="folders-onboarding">
           <div className="folders-onboarding__icon">🗂️</div>
           <h3 className="folders-onboarding__title">Organizá tus estudios</h3>
-          <p className="folders-onboarding__desc">
-            Creá carpetas por materia y guardá tus chats para estudiar mejor.
-          </p>
+          <p className="folders-onboarding__desc">Creá carpetas por materia y guardá tus chats para estudiar mejor.</p>
         </div>
       )}
 
@@ -1672,43 +1727,41 @@ function FoldersView({
             <span className="folders-empty-cta__text">Creá tu primera carpeta</span>
           </div>
         )}
-
-        {Array.isArray(folders) &&
-          folders.map((folder, i) => {
-            if (!folder || !folder.id) return null;
-            const progress = folderProgress[folder.id] ?? null;
-            return (
-              <div
-                key={folder.id}
-                className={`folder-card ${selectedFolder === folder.id ? "active" : ""}`}
-                style={{ animationDelay: `${i * 60}ms` }}
-                onClick={() => navigate(`/folder/${folder.id}`)}
-              >
-                <div className="folder-card__bg" />
-                <ProgressRing target={progress} />
-                <div className="folder-icon">📁</div>
-                <div className="folder-name">{folder.name || "Sin nombre"}</div>
-                <div className="folder-count">{folder.chatCount} chats</div>
-                <div className="folder-card-tools" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="folder-tool-btn folder-tool-btn--flash"
-                    title="Flashcards"
-                    onClick={(e) => { e.stopPropagation(); trackStudyAction("flashcards"); navigate(`/folder/${folder.id}/flashcards`); }}
-                  >🧠</button>
-                  <button
-                    className="folder-tool-btn folder-tool-btn--dev"
-                    title="Preguntas a desarrollo"
-                    onClick={(e) => { e.stopPropagation(); trackStudyAction("dev_questions"); navigate(`/folder/${folder.id}/dev-questions`); }}
-                  >✍️</button>
-                  <button
-                    className="folder-tool-btn folder-tool-btn--files"
-                    title="Subir archivo"
-                    onClick={(e) => { e.stopPropagation(); onUploadFile({ id: folder.id, name: folder.name }); }}
-                  >📎</button>
-                </div>
+        {Array.isArray(folders) && folders.map((folder, i) => {
+          if (!folder || !folder.id) return null;
+          const progress = folderProgress[folder.id] ?? null;
+          return (
+            <div
+              key={folder.id}
+              className={`folder-card ${selectedFolder === folder.id ? "active" : ""}`}
+              style={{ animationDelay: `${i * 60}ms` }}
+              onClick={() => navigate(`/folder/${folder.id}`)}
+            >
+              <div className="folder-card__bg" />
+              <ProgressRing target={progress} />
+              <div className="folder-icon">📁</div>
+              <div className="folder-name">{folder.name || "Sin nombre"}</div>
+              <div className="folder-count">{folder.chatCount} chats</div>
+              <div className="folder-card-tools" onClick={(e) => e.stopPropagation()}>
+                <button
+                  className="folder-tool-btn folder-tool-btn--flash"
+                  title="Flashcards"
+                  onClick={(e) => { e.stopPropagation(); trackStudyAction("flashcards"); navigate(`/folder/${folder.id}/flashcards`); }}
+                >🧠</button>
+                <button
+                  className="folder-tool-btn folder-tool-btn--dev"
+                  title="Preguntas a desarrollo"
+                  onClick={(e) => { e.stopPropagation(); trackStudyAction("dev_questions"); navigate(`/folder/${folder.id}/dev-questions`); }}
+                >✍️</button>
+                <button
+                  className="folder-tool-btn folder-tool-btn--files"
+                  title="Subir archivos"
+                  onClick={(e) => { e.stopPropagation(); onUploadFile({ id: folder.id, name: folder.name }); }}
+                >📎</button>
               </div>
-            );
-          })}
+            </div>
+          );
+        })}
       </div>
 
       {selectedFolder && (
@@ -1717,7 +1770,7 @@ function FoldersView({
             <h3>{folders.find((f) => f.id === selectedFolder)?.name || "Carpeta"}</h3>
             <div className="folder-actions">
               <button className="btn-add-chat" onClick={() => setShowAddChat(!showAddChat)}>+ Agregar chat</button>
-              <button className="btn-upload-file" onClick={() => { const folder = folders.find((f) => f.id === selectedFolder); onUploadFile({ id: selectedFolder, name: folder?.name || "Carpeta" }); }}>📎 Subir archivo</button>
+              <button className="btn-upload-file" onClick={() => { const folder = folders.find((f) => f.id === selectedFolder); onUploadFile({ id: selectedFolder, name: folder?.name || "Carpeta" }); }}>📎 Subir archivos</button>
               <button className="btn-flashcards" onClick={() => { trackStudyAction("flashcards"); navigate(`/folder/${selectedFolder}/flashcards`); }}>🧠 Flashcards</button>
               <button className="btn-dev-questions" onClick={() => { trackStudyAction("dev_questions"); navigate(`/folder/${selectedFolder}/dev-questions`); }}>✍️ Desarrollo</button>
               <button className="btn-exam" onClick={() => generateExam(selectedFolder)}>📄 Examen</button>

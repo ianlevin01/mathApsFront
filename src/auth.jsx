@@ -5,9 +5,10 @@ import { GoogleLogin } from "@react-oauth/google";
 const AUTH_BASE = "https://api.mathaps.online";
 
 export default function Auth({ onSuccess }) {
-  const [mode, setMode] = useState("login"); // "login" | "register"
+  const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -86,6 +87,89 @@ export default function Auth({ onSuccess }) {
     }
   }
 
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const res = await fetch(`${AUTH_BASE}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || `Error ${res.status}`);
+      }
+
+      setSuccessMsg(data?.message || "Si el email existe, recibirás un enlace para restablecer tu contraseña.");
+      setForgotEmail("");
+    } catch (err) {
+      setErrorMsg(err?.message || "Error desconocido");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function switchMode(newMode) {
+    setMode(newMode);
+    setErrorMsg("");
+    setSuccessMsg("");
+  }
+
+  // ── Vista: Olvidé mi contraseña ──────────────────────────────────────────
+  if (mode === "forgot") {
+    return (
+      <section className="auth">
+        <div className="auth-card float-soft">
+          <header className="auth-head">
+            <h2 className="auth-title">Restablecer contraseña</h2>
+            <p className="auth-subtitle">
+              Ingresá tu email y te enviamos un enlace para crear una nueva contraseña.
+            </p>
+          </header>
+
+          <form className="auth-form" onSubmit={handleForgotPassword}>
+            <label className="auth-label">
+              Email
+              <input
+                className="auth-input"
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="tuemail@gmail.com"
+                required
+                autoComplete="email"
+              />
+            </label>
+
+            {errorMsg && <div className="auth-error">⚠️ {errorMsg}</div>}
+            {successMsg && <div className="auth-success">✅ {successMsg}</div>}
+
+            <button className="auth-button" type="submit" disabled={isLoading || !!successMsg}>
+              {isLoading ? "Enviando..." : "Enviar enlace"}
+            </button>
+
+            <div className="auth-switch">
+              <button
+                type="button"
+                className="auth-link"
+                onClick={() => switchMode("login")}
+              >
+                ← Volver a iniciar sesión
+              </button>
+            </div>
+          </form>
+        </div>
+      </section>
+    );
+  }
+
+  // ── Vista: Login / Register ──────────────────────────────────────────────
   return (
     <section className="auth">
       <div className="auth-card float-soft">
@@ -143,6 +227,18 @@ export default function Auth({ onSuccess }) {
             />
           </label>
 
+          {mode === "login" && (
+            <div className="auth-forgot">
+              <button
+                type="button"
+                className="auth-link"
+                onClick={() => switchMode("forgot")}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
+          )}
+
           {errorMsg && <div className="auth-error">⚠️ {errorMsg}</div>}
           {successMsg && <div className="auth-success">✅ {successMsg}</div>}
 
@@ -161,7 +257,7 @@ export default function Auth({ onSuccess }) {
                 <button
                   type="button"
                   className="auth-link"
-                  onClick={() => setMode("login")}
+                  onClick={() => switchMode("login")}
                 >
                   Iniciá sesión
                 </button>
@@ -172,7 +268,7 @@ export default function Auth({ onSuccess }) {
                 <button
                   type="button"
                   className="auth-link"
-                  onClick={() => setMode("register")}
+                  onClick={() => switchMode("register")}
                 >
                   Registrate
                 </button>

@@ -10,6 +10,7 @@ import { interpretPlot } from "../utils/plotInterpreter";
 
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
+const MAX_CHARS = 2000;
 
 // ── Model Selector ──────────────────────────────────────────────────────────
 function ModelSelector({ models, selectedKey, onChange }) {
@@ -58,7 +59,7 @@ function ModelSelector({ models, selectedKey, onChange }) {
 export default function FolderChatView() {
   const navigate = useNavigate();
   const { folderId } = useParams();
-  const [searchParams] = useSearchParams(); // ← NUEVO
+  const [searchParams] = useSearchParams();
   const [folderName, setFolderName] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [chats, setChats] = useState([]);
@@ -78,6 +79,10 @@ export default function FolderChatView() {
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("mth-mini");
 
+  const charCount = problemText.length;
+  const isOverLimit = charCount >= MAX_CHARS;
+  const isNearLimit = charCount >= MAX_CHARS * 0.9;
+
   useEffect(() => {
     if (folderId) {
       loadFolderChats();
@@ -86,7 +91,6 @@ export default function FolderChatView() {
     loadModels();
   }, [folderId]);
 
-  // ← NUEVO: al montar, si hay ?id en la URL cargamos ese chat directamente
   useEffect(() => {
     const chatId = searchParams.get("id");
     if (chatId) {
@@ -155,7 +159,6 @@ export default function FolderChatView() {
     }
   }
 
-  // ← Carga un chat y actualiza la URL para que al recargar vuelva al mismo
   async function loadChat(chatId) {
     try {
       const token = getToken?.() || "";
@@ -166,7 +169,6 @@ export default function FolderChatView() {
       const data = await res.json();
       setCurrentChatId(chatId);
 
-      // ← NUEVO: actualizar la URL sin recargar la página
       navigate(`/folder/${folderId}?id=${chatId}`, { replace: true });
 
       const processedMessages = (data.messages || []).map((msg) => {
@@ -216,7 +218,7 @@ export default function FolderChatView() {
   }
 
   async function handleSolve() {
-    if (!problemText.trim()) return;
+    if (!problemText.trim() || isOverLimit) return;
 
     setIsLoading(true);
     setErrorMsg("");
@@ -298,7 +300,6 @@ export default function FolderChatView() {
               const newChatId = event.chat.chatId;
               setCurrentChatId(newChatId);
 
-              // ← NUEVO: actualizar la URL cuando se crea un chat nuevo
               navigate(`/folder/${folderId}?id=${newChatId}`, { replace: true });
 
               try {
@@ -328,14 +329,13 @@ export default function FolderChatView() {
     }
   }
 
-  // ← Al iniciar chat nuevo, limpiar también la URL
   function startNewChat() {
     setCurrentChatId(null);
     setMessages([]);
     setProblemText("");
     setImageFile(null);
     setImagePreview(null);
-    navigate(`/folder/${folderId}`, { replace: true }); // ← NUEVO: limpiar ?id de la URL
+    navigate(`/folder/${folderId}`, { replace: true });
   }
 
   return (
@@ -467,22 +467,26 @@ export default function FolderChatView() {
           <div className="chat-input-wrap">
             <textarea
               value={problemText}
-              onChange={(e) => setProblemText(e.target.value)}
+              onChange={(e) => setProblemText(e.target.value.slice(0, MAX_CHARS))}
               onPaste={handlePaste}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSolve(); } }}
               rows={3}
               placeholder="Escribí tu problema matemático... (Enter para enviar)"
               disabled={isLoading}
+              maxLength={MAX_CHARS}
             />
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-            />
-
+            <div
+              className="char-counter"
+              style={{
+                fontSize: "0.75rem",
+                textAlign: "right",
+                padding: "2px 4px",
+                color: isOverLimit ? "#e53935" : isNearLimit ? "#e57373" : "#888",
+                fontWeight: isNearLimit ? "600" : "normal",
+              }}
+            >
+              {charCount}/{MAX_CHARS}
+            </div>
             <div className="chat-input-actions">
               <button type="button" className="btn-attach" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>
                 📎
@@ -492,11 +496,22 @@ export default function FolderChatView() {
                 selectedKey={selectedModel}
                 onChange={setSelectedModel}
               />
-              <button onClick={handleSolve} disabled={isLoading || !problemText.trim()} className="btn-send">
+              <button
+                onClick={handleSolve}
+                disabled={isLoading || !problemText.trim() || isOverLimit}
+                className="btn-send"
+              >
                 {isLoading ? "..." : "Enviar"}
               </button>
             </div>
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+          />
         </div>
       </div>
     </div>

@@ -2123,3 +2123,8 @@ section {
   cursor: not-allowed;
   transform: none;
 }
+.auth-forgot {
+  text-align: right;
+  margin-top: -8px;
+  margin-bottom: 4px;
+}
