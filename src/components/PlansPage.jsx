@@ -13,11 +13,14 @@ const PLANS = [
     period: "/mes",
     desc: "Para probar la plataforma y resolver problemas básicos.",
     features: [
-      "Hasta 150 mensajes con IA por mes",
-      "Gráficos limitados",
-      "Hasta 3 carpetas",
-      "Flashcards básicas",
-      "Exportación simple",
+      "Hasta 30 mensajes con IA por día",
+      "Hasta 8 mensajes con imágenes por día",
+      "Gráficos ilimitados",
+      "Hasta 3 carpetas para organizar materias",
+      "Hasta 5 ejercicios de práctica diarios",
+      "Hasta 3 archivos de contenido por carpeta",
+      "Modelo matemático mth-mini",
+      "Seguimiento de avance por materia",
     ],
     buttonText: "Plan actual",
     buttonClass: "plans-page-btn plans-page-btn--ghost",
@@ -26,16 +29,18 @@ const PLANS = [
     id: "plus",
     badge: "Recomendado",
     name: "Plus",
-    price: "4.99",
+    price: "5.99",
     period: "/mes",
     desc: "Organización académica, modelos avanzados y seguimiento de progreso en una sola plataforma.",
     features: [
-      "Carpetas ilimitadas para organizar materias",
-      "Hasta 500 mensajes con IA por mes",
-      "Flashcards ilimitadas",
-      "Modelos matemáticos más avanzados",
-      "Seguimiento de progreso por materia",
-      "Exportación de exámenes en PDF",
+      "Hasta 60 mensajes con IA por día",
+      "Hasta 20 mensajes con imágenes por día",
+      "Gráficos ilimitados",
+      "Hasta 6 carpetas para organizar materias",
+      "Hasta 15 ejercicios de práctica diarios",
+      "Hasta 5 archivos de contenido por carpeta",
+      "Modelos matemáticos avanzados",
+      "Seguimiento de avance por materia",
     ],
     buttonText: "Pasar a Plus",
     buttonClass: "plans-page-btn plans-page-btn--primary",
@@ -44,16 +49,18 @@ const PLANS = [
     id: "pro",
     badge: "Más completo",
     name: "Pro",
-    price: "9.99",
+    price: "14.99",
     period: "/mes",
     desc: "Capacidades extendidas y herramientas diseñadas para optimizar el estudio a nivel superior.",
     features: [
-      "Hasta 2000 mensajes con IA por mes",
-      "Prioridad de procesamiento",
-      "Acceso a los mejores modelos matemáticos",
-      "Generación automática de resúmenes por carpeta",
-      "Estadísticas avanzadas de progreso",
-      "Acceso anticipado a nuevas funcionalidades",
+      "Hasta 150 mensajes con IA por día",
+      "Hasta 40 mensajes con imágenes por día",
+      "Gráficos ilimitados",
+      "Carpetas ilimitadas para organizar materias",
+      "Hasta 40 ejercicios de práctica diarios",
+      "Hasta 10 archivos de contenido por carpeta",
+      "Modelos matemáticos más avanzados",
+      "Seguimiento de avance por materia",
     ],
     buttonText: "Pasar a Pro",
     buttonClass: "plans-page-btn plans-page-btn--primary",
@@ -95,7 +102,6 @@ export default function PlansPage() {
         ? `${data.checkoutUrl}&embed=1`
         : `${data.checkoutUrl}?embed=1`;
 
-      // Abrir el popup
       const popup = window.open(
         popupUrl,
         "_blank",
@@ -103,13 +109,10 @@ export default function PlansPage() {
       );
 
       if (!popup) {
-        // Bloqueado por el navegador → redirigir en la misma pestaña
         window.location.href = data.checkoutUrl;
         return;
       }
 
-      // Navegar inmediatamente a la sección de suscripción
-      // El popup sigue abierto por encima mientras el usuario paga
       navigate("/account?section=billing");
 
     } catch (error) {
