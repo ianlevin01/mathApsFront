@@ -15,7 +15,7 @@ const MAX_CHARS = 2000;
 // ── Model Selector ──────────────────────────────────────────────────────────
 function ModelSelector({ models, selectedKey, onChange }) {
   const [open, setOpen] = useState(false);
-  const selected = models.find((m) => m.key === selectedKey) || models[0];
+  const selected = models.find((m) => m.key === selectedKey) || models.find((m) => m.available) || models[0];
   if (!selected || models.length <= 1) return null;
 
   return (
@@ -37,16 +37,36 @@ function ModelSelector({ models, selectedKey, onChange }) {
           {models.map((m) => (
             <button
               key={m.key}
-              className={`model-selector__option ${m.key === selectedKey ? "active" : ""}`}
-              onClick={() => { onChange(m.key); setOpen(false); }}
+              className={`model-selector__option ${m.key === selectedKey ? "active" : ""} ${!m.available ? "locked" : ""}`}
+              onClick={() => {
+                if (!m.available) return;
+                onChange(m.key);
+                setOpen(false);
+              }}
+              disabled={!m.available}
+              title={!m.available ? "No disponible en tu plan actual" : undefined}
             >
               <div className="model-selector__option-left">
-                <span className="model-selector__option-name">{m.displayName}</span>
-                <span className="model-selector__option-desc">{m.description}</span>
+                <span className="model-selector__option-name">
+                  {!m.available && <span className="model-selector__lock-icon">🔒</span>}
+                  <span style={{ textDecoration: m.available ? "none" : "line-through", opacity: m.available ? 1 : 0.5 }}>
+                    {m.displayName}
+                  </span>
+                </span>
+                <span className="model-selector__option-desc" style={{ opacity: m.available ? 1 : 0.4 }}>
+                  {m.available ? m.description : "Requiere un plan superior"}
+                </span>
               </div>
-              {m.cost > 1 && (
-                <span className="model-selector__option-cost">×{m.cost} msgs</span>
-              )}
+              <div className="model-selector__option-right">
+                {m.cost > 1 && (
+                  <span className="model-selector__option-cost" style={{ opacity: m.available ? 1 : 0.4 }}>
+                    ×{m.cost} msgs
+                  </span>
+                )}
+                {!m.available && (
+                  <span className="model-selector__upgrade-badge">⚡ Subir plan</span>
+                )}
+              </div>
             </button>
           ))}
         </div>
@@ -196,7 +216,12 @@ export default function ChatView() {
       });
       if (!res.ok) return;
       const data = await res.json();
-      setAvailableModels(Array.isArray(data) ? data : []);
+      const models = Array.isArray(data) ? data : [];
+      setAvailableModels(models);
+
+      // Auto-select the first available model
+      const firstAvailable = models.find((m) => m.available);
+      if (firstAvailable) setSelectedModel(firstAvailable.key);
     } catch (err) {
       console.error("Error cargando modelos:", err);
     }
