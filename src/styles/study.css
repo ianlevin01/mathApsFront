@@ -3096,3 +3096,10 @@
   border-color: #fff;
   transform: scale(1.2);
 }
+.folder-tool-btn--delete {
+  color: rgba(239, 68, 68, 0.7);
+}
+.folder-tool-btn--delete:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}

@@ -154,6 +154,55 @@ function CreateFolderPopup({ onClose, onCreate }) {
   );
 }
 
+// ── Delete Folder Modal ─────────────────────────────────────────────────────
+function DeleteFolderModal({ folderName, loading, onConfirm, onClose }) {
+  return (
+    <div className="create-folder-overlay" onClick={!loading ? onClose : undefined}>
+      <div className="create-folder-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="create-folder-header">
+          <h3 className="create-folder-title">⚠️ Eliminar carpeta</h3>
+          <button className="create-folder-close" onClick={onClose} disabled={loading}>✕</button>
+        </div>
+        <div className="create-folder-body">
+          <p style={{ color: "rgba(255,255,255,0.85)", marginBottom: "0.75rem" }}>
+            Estás por eliminar <strong>"{folderName}"</strong>. Esta acción no se puede deshacer.
+          </p>
+          <ul style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.875rem", paddingLeft: "1.25rem", lineHeight: "1.8" }}>
+            <li>Los chats asociados serán <strong>desvinculados</strong> (no eliminados)</li>
+            <li>Los archivos subidos serán <strong>eliminados permanentemente</strong></li>
+            <li>Las flashcards y preguntas de desarrollo serán <strong>eliminadas</strong></li>
+          </ul>
+        </div>
+        <div className="create-folder-footer">
+          <button className="create-folder-cancel" onClick={onClose} disabled={loading}>
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            style={{
+              background: "rgba(239,68,68,0.85)",
+              color: "#fff",
+              border: "1px solid rgba(239,68,68,0.5)",
+              borderRadius: "8px",
+              padding: "0.5rem 1.25rem",
+              fontWeight: 600,
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.7 : 1,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            {loading && <span className="file-upload-spinner" />}
+            {loading ? "Eliminando…" : "Sí, eliminar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Pick Folder Modal ───────────────────────────────────────────────────────
 function PickFolderModal({ mode, folders, onPick, onClose }) {
   const modeLabel = mode === "flashcards" ? "Flashcards" : "Preguntas a desarrollo";
@@ -1266,16 +1315,61 @@ export default function StudyHub() {
   const [rachaLoading, setRachaLoading] = useState(true);
   const [showDailyExam, setShowDailyExam] = useState(false);
 
-  // ── Colores de carpetas (persisten en localStorage) ──
-  const [folderColors, setFolderColorsState] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("folderColors") || "{}"); }
-    catch { return {}; }
-  });
+  // ── Colores de carpetas (desde DB, sin localStorage) ──
+  const [folderColors, setFolderColorsState] = useState({});
 
-  function setFolderColor(folderId, color) {
-    const updated = { ...folderColors, [folderId]: color };
-    setFolderColorsState(updated);
-    localStorage.setItem("folderColors", JSON.stringify(updated));
+  // ── Eliminar carpeta ──
+  const [deletingFolder, setDeletingFolder] = useState(null); // { id, name }
+  const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
+
+  // Actualiza color en estado local y persiste en DB
+  async function setFolderColor(folderId, color) {
+    // Optimistic update
+    setFolderColorsState((prev) => ({ ...prev, [folderId]: color }));
+    try {
+      const token = getToken?.() || "";
+      await fetch(`${API_BASE}/folder/${folderId}/color`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ color }),
+      });
+    } catch (err) {
+      console.error("Error guardando color:", err);
+      // Revertir si falla
+      setFolderColorsState((prev) => {
+        const reverted = { ...prev };
+        delete reverted[folderId];
+        return reverted;
+      });
+    }
+  }
+
+  async function handleDeleteFolder(folderId) {
+    setDeleteConfirmLoading(true);
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/${folderId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+
+      // Limpiar estado local
+      setFolders((prev) => prev.filter((f) => f.id !== folderId));
+      setFolderColorsState((prev) => { const n = { ...prev }; delete n[folderId]; return n; });
+      if (selectedFolder === folderId) {
+        setSelectedFolder(null);
+        setFolderChats([]);
+      }
+      setDeletingFolder(null);
+    } catch (err) {
+      console.error("Error eliminando carpeta:", err);
+    } finally {
+      setDeleteConfirmLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -1373,9 +1467,16 @@ export default function StudyHub() {
             name: folder.name,
             chatCount: 0,
             createdAt: folder.createdAt,
+            color: folder.color ?? null,
           }))
         : [];
       setFolders(processed);
+
+      // Inicializar colores desde DB
+      const colorMap = {};
+      processed.forEach((f) => { if (f.color) colorMap[f.id] = f.color; });
+      setFolderColorsState(colorMap);
+
       loadFolderProgressBatch(processed);
       loadFolderChatCountsBatch(processed);
     } catch {
@@ -1520,6 +1621,14 @@ export default function StudyHub() {
       {showCreatePopup && (
         <CreateFolderPopup onClose={() => setShowCreatePopup(false)} onCreate={createFolder} />
       )}
+      {deletingFolder && (
+        <DeleteFolderModal
+          folderName={deletingFolder.name}
+          loading={deleteConfirmLoading}
+          onConfirm={() => handleDeleteFolder(deletingFolder.id)}
+          onClose={() => !deleteConfirmLoading && setDeletingFolder(null)}
+        />
+      )}
       {quickAssignChat && (
         <QuickAssignModal
           chat={allChats.find((c) => (c.chatId || c.id) === quickAssignChat)}
@@ -1661,6 +1770,7 @@ export default function StudyHub() {
             filesPanelRefresh={filesPanelRefresh}
             folderColors={folderColors}
             setFolderColor={setFolderColor}
+            onDeleteFolder={(folder) => setDeletingFolder(folder)}
           />
         )}
         {view === "progress" && (
@@ -1706,7 +1816,7 @@ function FoldersView({
   navigate, folders, folderProgress, selectedFolder, folderChats,
   allChats, unorganizedChats, isLoadingChats, onCreateFolder, onSelectFolder,
   assignChatToFolder, onQuickAssign, generateExam, onUploadFile, filesPanelRefresh,
-  folderColors, setFolderColor,
+  folderColors, setFolderColor, onDeleteFolder,
 }) {
   const [showAddChat, setShowAddChat] = useState(false);
   const isEmpty = !folders || folders.length === 0;
@@ -1787,6 +1897,11 @@ function FoldersView({
                   title="Subir archivos"
                   onClick={(e) => { e.stopPropagation(); onUploadFile({ id: folder.id, name: folder.name }); }}
                 >📎</button>
+                <button
+                  className="folder-tool-btn folder-tool-btn--delete"
+                  title="Eliminar carpeta"
+                  onClick={(e) => { e.stopPropagation(); onDeleteFolder({ id: folder.id, name: folder.name }); }}
+                >🗑️</button>
               </div>
               <div className="folder-color-picker" onClick={(e) => e.stopPropagation()}>
                 {FOLDER_COLORS.map((c) => (
