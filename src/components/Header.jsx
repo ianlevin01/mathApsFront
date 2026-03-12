@@ -11,7 +11,7 @@ export default function Header({ isAuthenticated, onLogin, onLogout, sidebarOpen
   const initials    = email ? email[0].toUpperCase() : "?";
   const username    = email ? email.split("@")[0] : "";
 
-  const isChat = location.pathname === "/chat";
+  const isChat = location.pathname === "/chat" || location.pathname.startsWith("/folder/");
 
   /* close on outside click */
   useEffect(() => {

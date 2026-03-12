@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { getToken, getEmailFromToken } from "../auth";
+import { useNavigate, useLocation } from "react-router-dom";import { getToken, getEmailFromToken } from "../auth";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -19,6 +18,17 @@ const FOLDER_SUGGESTIONS = [
   "Probabilidad",
   "Análisis numérico",
   "Física matemática",
+];
+
+const FOLDER_COLORS = [
+  { id: "violet", label: "Violeta", value: "rgba(124,92,255,0.35)" },
+  { id: "blue",   label: "Azul",    value: "rgba(59,130,246,0.35)" },
+  { id: "green",  label: "Verde",   value: "rgba(34,197,94,0.35)"  },
+  { id: "orange", label: "Naranja", value: "rgba(249,115,22,0.35)" },
+  { id: "pink",   label: "Rosa",    value: "rgba(236,72,153,0.35)" },
+  { id: "teal",   label: "Teal",    value: "rgba(20,184,166,0.35)" },
+  { id: "red",    label: "Rojo",    value: "rgba(239,68,68,0.35)"  },
+  { id: "yellow", label: "Amarillo",value: "rgba(234,179,8,0.35)"  },
 ];
 
 function trackStudyAction(actionType) {
@@ -229,7 +239,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
   const [visibleCount, setVisibleCount] = useState(MODAL_FILES_PAGE_SIZE);
   const [deletingId, setDeletingId] = useState(null);
 
-  // ── Usage: { used, limit, available, plan }
   const [usage, setUsage] = useState(null);
   const [loadingUsage, setLoadingUsage] = useState(true);
 
@@ -282,7 +291,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
       });
       if (!res.ok) throw new Error();
       setExistingFiles((prev) => prev.filter((f) => f.fileId !== fileId));
-      // Actualizar usage localmente al eliminar
       setUsage((prev) =>
         prev ? { ...prev, used: prev.used - 1, available: prev.available + 1 } : prev
       );
@@ -293,7 +301,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
     }
   }
 
-  // Cuántos puede subir: limitado por disponibles del plan Y por el máximo por vez
   const availableSlots = usage ? Math.min(usage.available, MAX_FILES_PER_UPLOAD) : MAX_FILES_PER_UPLOAD;
   const limitReached = usage ? usage.available <= 0 : false;
 
@@ -400,7 +407,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
         ...prev,
       ]);
 
-      // Actualizar usage localmente al subir
       setUsage((prev) =>
         prev
           ? { ...prev, used: prev.used + uploaded.length, available: Math.max(0, prev.available - uploaded.length) }
@@ -448,8 +454,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
         </div>
 
         <div className="file-upload-body">
-
-          {/* ── BARRA DE USO ── */}
           <div className="file-usage-bar-wrap">
             {loadingUsage ? (
               <div className="file-usage-bar-skeleton" />
@@ -457,9 +461,7 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
               <>
                 <div className="file-usage-bar-header">
                   <span className="file-usage-bar-label">Archivos en esta carpeta</span>
-                  <span className="file-usage-bar-count">
-                    {usage.used} / {usage.limit}
-                  </span>
+                  <span className="file-usage-bar-count">{usage.used} / {usage.limit}</span>
                 </div>
                 <div className="file-usage-bar-bg">
                   <div
@@ -489,7 +491,6 @@ function FileUploadModal({ folderId, folderName, onClose, onUploaded }) {
             )}
           </div>
 
-          {/* ── DROP ZONE o PREVIEWS ── */}
           {files.length === 0 ? (
             <div
               className={`file-drop-zone ${isDragging ? "file-drop-zone--active" : ""} ${limitReached ? "file-drop-zone--disabled" : ""}`}
@@ -1242,6 +1243,7 @@ function StreakCard({ racha, onStartExam, loading }) {
 // ── Main ────────────────────────────────────────────────────────────────────
 export default function StudyHub() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [view, setView] = useState("folders");
   const [folders, setFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);
@@ -1264,11 +1266,28 @@ export default function StudyHub() {
   const [rachaLoading, setRachaLoading] = useState(true);
   const [showDailyExam, setShowDailyExam] = useState(false);
 
+  // ── Colores de carpetas (persisten en localStorage) ──
+  const [folderColors, setFolderColorsState] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("folderColors") || "{}"); }
+    catch { return {}; }
+  });
+
+  function setFolderColor(folderId, color) {
+    const updated = { ...folderColors, [folderId]: color };
+    setFolderColorsState(updated);
+    localStorage.setItem("folderColors", JSON.stringify(updated));
+  }
+
   useEffect(() => {
     loadFolders();
     loadAllChats();
     loadRacha();
   }, []);
+
+  useEffect(() => {
+    loadFolders();
+    loadAllChats();
+  }, [location.pathname]);
 
   async function loadRacha() {
     setRachaLoading(true);
@@ -1640,6 +1659,8 @@ export default function StudyHub() {
             generateExam={generateExam}
             onUploadFile={(folder) => setUploadModalFolder(folder)}
             filesPanelRefresh={filesPanelRefresh}
+            folderColors={folderColors}
+            setFolderColor={setFolderColor}
           />
         )}
         {view === "progress" && (
@@ -1685,6 +1706,7 @@ function FoldersView({
   navigate, folders, folderProgress, selectedFolder, folderChats,
   allChats, unorganizedChats, isLoadingChats, onCreateFolder, onSelectFolder,
   assignChatToFolder, onQuickAssign, generateExam, onUploadFile, filesPanelRefresh,
+  folderColors, setFolderColor,
 }) {
   const [showAddChat, setShowAddChat] = useState(false);
   const isEmpty = !folders || folders.length === 0;
@@ -1730,11 +1752,18 @@ function FoldersView({
         {Array.isArray(folders) && folders.map((folder, i) => {
           if (!folder || !folder.id) return null;
           const progress = folderProgress[folder.id] ?? null;
+          const color = folderColors[folder.id];
           return (
             <div
               key={folder.id}
               className={`folder-card ${selectedFolder === folder.id ? "active" : ""}`}
-              style={{ animationDelay: `${i * 60}ms` }}
+              style={{
+                animationDelay: `${i * 60}ms`,
+                ...(color ? {
+                  background: `linear-gradient(135deg, ${color}, rgba(18,18,26,0.95))`,
+                  borderColor: color,
+                } : {}),
+              }}
               onClick={() => navigate(`/folder/${folder.id}`)}
             >
               <div className="folder-card__bg" />
@@ -1758,6 +1787,17 @@ function FoldersView({
                   title="Subir archivos"
                   onClick={(e) => { e.stopPropagation(); onUploadFile({ id: folder.id, name: folder.name }); }}
                 >📎</button>
+              </div>
+              <div className="folder-color-picker" onClick={(e) => e.stopPropagation()}>
+                {FOLDER_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`folder-color-dot ${folderColors[folder.id] === c.value ? "active" : ""}`}
+                    style={{ background: c.value }}
+                    title={c.label}
+                    onClick={(e) => { e.stopPropagation(); setFolderColor(folder.id, c.value); }}
+                  />
+                ))}
               </div>
             </div>
           );

@@ -3069,3 +3069,30 @@
   border-color: rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.02);
 }
+
+.folder-color-picker {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  padding: 6px 4px 2px;
+  justify-content: center;
+}
+
+.folder-color-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease;
+  padding: 0;
+}
+
+.folder-color-dot:hover {
+  transform: scale(1.3);
+}
+
+.folder-color-dot.active {
+  border-color: #fff;
+  transform: scale(1.2);
+}

@@ -204,7 +204,7 @@ export default function App() {
             }
           />
           <Route path="/study" element={isAuthenticated ? <StudyHub /> : <Navigate to="/" replace />} />
-          <Route path="/folder/:folderId" element={isAuthenticated ? <FolderChatView /> : <Navigate to="/" replace />} />
+          <Route path="/folder/:folderId" element={isAuthenticated ? <FolderChatView sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} /> : <Navigate to="/" replace />} />
           <Route path="/folder/:folderId/flashcards" element={isAuthenticated ? <Flashcards /> : <Navigate to="/" replace />} />
           <Route path="/folder/:folderId/dev-questions" element={isAuthenticated ? <DevQuestions /> : <Navigate to="/" replace />} />
           <Route path="/plans" element={isAuthenticated ? <PlansPage /> : <Navigate to="/" replace />} />
