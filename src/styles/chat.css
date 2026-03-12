@@ -993,3 +993,12 @@
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(124,92,255,0.20);
 }
+@media (max-width: 768px) {
+  .chat-sidebar {
+    position: absolute;
+    left: 0;
+    top: 52px;
+    bottom: 0;
+    height: calc(100vh - 52px);
+  }
+}

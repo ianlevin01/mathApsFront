@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { getEmailFromToken } from "../auth";
 
-export default function Header({ isAuthenticated, onLogin, onLogout }) {
+export default function Header({ isAuthenticated, onLogin, onLogout, sidebarOpen, setSidebarOpen }) {
   const navigate    = useNavigate();
+  const location    = useLocation();
   const [open, setOpen] = useState(false);
   const dropRef     = useRef(null);
   const email       = isAuthenticated ? getEmailFromToken() : null;
   const initials    = email ? email[0].toUpperCase() : "?";
   const username    = email ? email.split("@")[0] : "";
+
+  const isChat = location.pathname === "/chat";
 
   /* close on outside click */
   useEffect(() => {
@@ -34,6 +37,23 @@ export default function Header({ isAuthenticated, onLogin, onLogout }) {
   return (
     <header className="header">
       <div className="header-inner">
+
+        {/* Hamburguesa — solo visible en /chat */}
+        {isAuthenticated && isChat && setSidebarOpen && (
+          <button
+            className="hamburger-btn"
+            onClick={() => setSidebarOpen(o => !o)}
+            aria-label="Toggle chat history"
+            aria-expanded={sidebarOpen}
+          >
+            <span className={`hamburger-icon ${sidebarOpen ? "open" : ""}`}>
+              <span />
+              <span />
+              <span />
+            </span>
+          </button>
+        )}
+
         {/* Brand */}
         <div className="brand">
           <div className="logo">
@@ -54,7 +74,6 @@ export default function Header({ isAuthenticated, onLogin, onLogout }) {
         <nav className="nav">
           {isAuthenticated ? (
             <>
-              <Link to="/dashboard">Dashboard</Link>
               <Link to="/chat">Chat</Link>
               <Link to="/study">Estudios</Link>
 

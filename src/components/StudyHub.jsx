@@ -1541,7 +1541,7 @@ export default function StudyHub() {
       )}
 
       <div className="study-header">
-        <button className="btn-back" onClick={() => navigate("/dashboard")}>← Dashboard</button>
+        <button className="btn-back" onClick={() => navigate("/chat")}>← Chat</button>
         <div className="study-header-text">
           <h1 className="study-title shine-platinum">Mis Estudios</h1>
           <p className="study-subtitle">Tu espacio de aprendizaje personalizado</p>

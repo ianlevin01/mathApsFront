@@ -6,7 +6,6 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import Header from "./components/Header";
 import Login from "./auth.jsx";
-import Dashboard from "./components/Dashboard";
 import ChatView from "./components/ChatView";
 import StudyHub from "./components/StudyHub";
 import FolderChatView from "./components/FolderChatView";
@@ -23,7 +22,6 @@ import VerifyEmail from "./components/VerifyEmail";
 import ResetPassword from "./components/ResetPassword";
 
 import "./App.css";
-import "./styles/dashboard.css";
 import "./styles/chat.css";
 import "./styles/study.css";
 import "./styles/plans.css";
@@ -143,16 +141,16 @@ const STEPS = [
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true); // ← NUEVO
+  const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // ← NUEVO
 
   useEffect(() => {
     const token = getToken();
     setIsAuthenticated(!!token);
-    setLoading(false); // ← NUEVO
+    setLoading(false);
   }, []);
 
-  // ← NUEVO: mientras verifica el token, no renderiza nada para evitar redirecciones falsas
   if (loading) return null;
 
   function handleLoginSuccess() {
@@ -172,6 +170,8 @@ export default function App() {
           isAuthenticated={isAuthenticated}
           onLogin={() => setShowLogin(true)}
           onLogout={handleLogout}
+          sidebarOpen={sidebarOpen}         // ← NUEVO
+          setSidebarOpen={setSidebarOpen}   // ← NUEVO
         />
 
         {showLogin && !isAuthenticated && (
@@ -188,15 +188,21 @@ export default function App() {
             path="/"
             element={
               isAuthenticated
-                ? <Navigate to="/dashboard" replace />
+                ? <Navigate to="/chat" replace />
                 : <LandingPage onLogin={() => setShowLogin(true)} />
             }
           />
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/dashboard" element={isAuthenticated ? <Dashboard onLogout={handleLogout} /> : <Navigate to="/" replace />} />
-          <Route path="/chat" element={isAuthenticated ? <ChatView /> : <Navigate to="/" replace />} />
+          <Route
+            path="/chat"
+            element={
+              isAuthenticated
+                ? <ChatView sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} /> // ← NUEVO
+                : <Navigate to="/" replace />
+            }
+          />
           <Route path="/study" element={isAuthenticated ? <StudyHub /> : <Navigate to="/" replace />} />
           <Route path="/folder/:folderId" element={isAuthenticated ? <FolderChatView /> : <Navigate to="/" replace />} />
           <Route path="/folder/:folderId/flashcards" element={isAuthenticated ? <Flashcards /> : <Navigate to="/" replace />} />

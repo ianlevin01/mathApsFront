@@ -36,4 +36,34 @@
 .card {
   padding: 2em;
 }
+.hamburger-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  margin-right: 8px;
+  color: inherit;
+}
 
+.hamburger-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 22px;
+}
+
+.hamburger-icon span {
+  display: block;
+  height: 2px;
+  background: currentColor;
+  border-radius: 2px;
+  transition: all 0.25s ease;
+  transform-origin: center;
+}
+
+.hamburger-icon.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger-icon.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+.hamburger-icon.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
