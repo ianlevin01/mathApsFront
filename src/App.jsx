@@ -443,7 +443,7 @@ function CalculatorDemo({ onLogin }) {
       const formData = new FormData();
       formData.append("problem", problemText);
       if (imageFile) formData.append("image", imageFile);
-      const res = await fetch("http://localhost:3000/math/guest", { method: "POST", body: formData });
+      const res = await fetch("https://api.mathaps.online/math/guest", { method: "POST", body: formData });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const data = await res.json();
       setAnswerText(data?.answerText || "");

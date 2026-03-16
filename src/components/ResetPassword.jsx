@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
-const AUTH_BASE = "http://localhost:3000";
+const AUTH_BASE = "https://api.mathaps.online";
 
 export default function ResetPassword() {
   const [searchParams] = useSearchParams();
