@@ -7,6 +7,7 @@ import rehypeKatex from "rehype-katex";
 import { getToken, getEmailFromToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
+import OnboardingTour from "./OnboardingTour";
 
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
@@ -19,7 +20,7 @@ function ModelSelector({ models, selectedKey, onChange }) {
   if (!selected || models.length <= 1) return null;
 
   return (
-    <div className="model-selector">
+    <div data-tour="model-selector" className="model-selector">
       <button className="model-selector__trigger" onClick={() => setOpen((v) => !v)} title="Cambiar modelo">
         <span className="model-selector__name">{selected.displayName}</span>
         {selected.cost > 1 && <span className="model-selector__cost">×{selected.cost}</span>}
@@ -105,7 +106,6 @@ function FolderNudge({ suggestion, folders, onAssignExisting, onCreateNew, onDis
 }
 
 // ── Main Component ──────────────────────────────────────────────────────────
-// sidebarOpen y setSidebarOpen vienen del Header hamburguesa via App.jsx
 export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -269,7 +269,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       });
       setMessages(processed);
       setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: "instant" }); }, 50);
-      // Cerrar sidebar en mobile al seleccionar un chat
       if (window.innerWidth < 768) setSidebarOpen(false);
     } catch (err) { console.error(err); }
   }
@@ -366,12 +365,15 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
 
   return (
     <div className="chat-view">
+      {/* Onboarding tour — se muestra solo la primera vez */}
+      <OnboardingTour autoStart={true} />
+
       {/* Overlay para cerrar sidebar en mobile tocando fuera */}
       {sidebarOpen && window.innerWidth < 768 && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar — abre/cierra con el hamburguesa del header */}
+      {/* Sidebar */}
       <div className={`chat-sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="chat-sidebar-header">
           <button className="btn-new-chat" onClick={startNewChat}>+ Nuevo Chat</button>
@@ -514,7 +516,15 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
               {charCount}/{MAX_CHARS}
             </div>
             <div className="chat-input-actions">
-              <button type="button" className="btn-attach" onClick={() => fileInputRef.current?.click()} disabled={isLoading}>📎</button>
+              <button
+                data-tour="attach"
+                type="button"
+                className="btn-attach"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading}
+              >
+                📎
+              </button>
               <ModelSelector models={availableModels} selectedKey={selectedModel} onChange={setSelectedModel} />
               <button onClick={handleSolve} disabled={isLoading || !problemText.trim() || isOverLimit} className="btn-send">
                 {isLoading ? "..." : "Enviar"}

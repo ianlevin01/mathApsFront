@@ -41,6 +41,7 @@ export default function Header({ isAuthenticated, onLogin, onLogout, sidebarOpen
         {/* Hamburguesa — solo visible en /chat */}
         {isAuthenticated && isChat && setSidebarOpen && (
           <button
+            data-tour="hamburger"
             className="hamburger-btn"
             onClick={() => setSidebarOpen(o => !o)}
             aria-label="Toggle chat history"
@@ -75,7 +76,7 @@ export default function Header({ isAuthenticated, onLogin, onLogout, sidebarOpen
           {isAuthenticated ? (
             <>
               <Link to="/chat">Chat</Link>
-              <Link to="/study">Estudios</Link>
+              <Link data-tour="studies" to="/study">Estudios</Link>
 
               {/* ── User dropdown ── */}
               <div className="nav-auth" ref={dropRef}>

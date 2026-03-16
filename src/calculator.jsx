@@ -20,7 +20,7 @@ function normalizeMath(text) {
   s = s.replace(/\\\[(.*?)\\\]/gs, (_, m) => `$$${m}$$`);
   s = s.replace(/\\\((.*?)\\\)/gs, (_, m) => `$${m}$`);
 
-  // 3) Caso “triple backticks” con latex: lo convierte a bloque
+  // 3) Caso "triple backticks" con latex: lo convierte a bloque
   s = s.replace(/```latex\s*([\s\S]*?)```/g, (_, m) => `$$\n${m}\n$$`);
 
   return s;
@@ -156,8 +156,6 @@ export default function Calculator() {
       const token = getToken?.() || "";
       const formData = new FormData();
 
-      // OJO: tu backend dijo "solo texto", pero esto igual lo mandamos en form-data.
-      // Si tu backend quiere JSON puro, ahí sí hay que cambiar el backend o el client.
       formData.append("problem", problemText);
       if (imageFile) formData.append("image", imageFile);
 
@@ -186,7 +184,12 @@ export default function Calculator() {
 
     try {
       const ps = plotSpec;
-      const raw = String(ps.plotType || "").toLowerCase().trim();
+      const raw = String(ps.plotType ?? "").toLowerCase().trim();
+
+      // ── Sin plotType o valores vacíos/nulos → no hay gráfico, sin error ──
+      if (!raw || raw === "null" || raw === "none" || raw === "undefined") {
+        return { model: null, error: "" };
+      }
 
       // Normalizaciones típicas
       const plotType =
@@ -563,8 +566,10 @@ export default function Calculator() {
         };
       }
 
-      // Si no matchea nada:
-      return { model: null, error: `plotType no soportado: "${ps.plotType}"` };
+      // ── plotType desconocido → silencioso, sin error visible ──
+      console.warn(`[Calculator] plotType desconocido: "${ps.plotType}"`);
+      return { model: null, error: "" };
+
     } catch (e) {
       console.error("Error generando gráfico:", e);
       return { model: null, error: "No se pudo generar el gráfico." };

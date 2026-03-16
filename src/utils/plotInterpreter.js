@@ -119,7 +119,13 @@ export function interpretPlot(plotSpec) {
 
   try {
     const ps = plotSpec;
-    const raw = String(ps.plotType || "").toLowerCase().trim();
+    const raw = String(ps.plotType ?? "").toLowerCase().trim();
+
+    // ── Sin plotType o valores vacíos/nulos → no hay gráfico, sin error ──
+    if (!raw || raw === "null" || raw === "none" || raw === "undefined") {
+      return { model: null, error: "" };
+    }
+
     const plotType =
       raw === "curve" || raw === "2d" ? "curve2d" : raw;
 
@@ -306,7 +312,6 @@ export function interpretPlot(plotSpec) {
           return null;
         }
         const ys = xs.map((x) => safeEval1(f, x));
-        // Si todos son null, la función no es válida para este rango
         if (ys.every((v) => v === null)) return null;
         return {
           type: "scatter", mode: "lines",
@@ -434,10 +439,10 @@ export function interpretPlot(plotSpec) {
       };
     }
 
-    return {
-      model: null,
-      error: `plotType no soportado: "${ps.plotType}"`,
-    };
+    // ── plotType desconocido → silencioso, sin error visible ──
+    console.warn(`[plotInterpreter] plotType desconocido: "${ps.plotType}"`);
+    return { model: null, error: "" };
+
   } catch (e) {
     console.error("Error generando gráfico:", e);
     return { model: null, error: `Error generando gráfico: ${e.message}` };

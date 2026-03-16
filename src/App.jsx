@@ -20,7 +20,6 @@ import { normalizeMath } from "./utils/mathUtils";
 import { interpretPlot } from "./utils/plotInterpreter";
 import VerifyEmail from "./components/VerifyEmail";
 import ResetPassword from "./components/ResetPassword";
-
 import "./App.css";
 import "./styles/chat.css";
 import "./styles/study.css";

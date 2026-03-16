@@ -12,6 +12,7 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
+    "@floating-ui/react-dom": "^2.1.8",
     "@react-oauth/google": "^0.13.4",
     "better-react-mathjax": "^2.4.0-beta-1",
     "google-auth-library": "^10.5.0",
@@ -24,6 +25,7 @@
     "react-markdown": "^10.1.0",
     "react-plotly.js": "^2.6.0",
     "react-router-dom": "^6.x.x",
+    "react-tourlight": "^0.1.1",
     "rehype-katex": "^7.0.1",
     "remark-math": "^6.0.0"
   },
