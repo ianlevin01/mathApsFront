@@ -5,7 +5,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
 
-const API_BASE = "https://api.mathaps.online";
+const API_BASE = "http://localhost:3000";
 
 const FOLDER_SUGGESTIONS = [
   "Cálculo diferencial",
@@ -891,7 +891,8 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
       const token = getToken?.() || "";
       const res = await fetch(`${API_BASE}/folder/${folderId}/flashcards`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ isDaily: true }), // 👈
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -939,7 +940,7 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
         const res = await fetch(`${API_BASE}/folder/${selectedFolder}/dev-questions`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ previousQuestions: [] }),
+          body: JSON.stringify({ previousQuestions: [], isDaily: true }), // 👈
         });
         if (!res.ok) throw new Error();
         const data = await res.json();

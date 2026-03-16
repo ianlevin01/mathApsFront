@@ -26,7 +26,7 @@ function MathText({ children, className }) {
   );
 }
 
-const API_BASE = "https://api.mathaps.online";
+const API_BASE = "http://localhost:3000";
 
 export default function Flashcards() {
   const { folderId } = useParams();
