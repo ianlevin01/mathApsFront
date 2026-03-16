@@ -8,6 +8,7 @@ const PLANS = [
   {
     id: "free",
     badge: null,
+    trialBadge: null,
     name: "Free",
     price: "0",
     period: "/mes",
@@ -28,6 +29,7 @@ const PLANS = [
   {
     id: "plus",
     badge: "Recomendado",
+    trialBadge: "3 días gratis",
     name: "Plus",
     price: "5.99",
     period: "/mes",
@@ -42,12 +44,13 @@ const PLANS = [
       "Modelos matemáticos avanzados",
       "Seguimiento de avance por materia",
     ],
-    buttonText: "Pasar a Plus",
+    buttonText: "Empezar prueba gratis",
     buttonClass: "plans-page-btn plans-page-btn--primary",
   },
   {
     id: "pro",
     badge: "Más completo",
+    trialBadge: null,
     name: "Pro",
     price: "14.99",
     period: "/mes",
@@ -155,7 +158,13 @@ export default function PlansPage() {
               p.id !== "free" ? "plans-page-card--premium" : ""
             } ${p.id === "plus" ? "plans-page-card--featured" : ""}`}
           >
-            {p.badge && <div className="plans-page-badge">{p.badge}</div>}
+            {/* Badges superiores */}
+            <div className="plans-page-badges">
+              {p.badge && <div className="plans-page-badge">{p.badge}</div>}
+              {p.trialBadge && (
+                <div className="plans-page-trial-badge">🎁 {p.trialBadge}</div>
+              )}
+            </div>
 
             <header className="plans-page-card-head">
               <h3 className="plans-page-name">{p.name}</h3>
@@ -188,6 +197,8 @@ export default function PlansPage() {
               <p className="plans-page-footnote">
                 {p.id === "free"
                   ? "Sin tarjeta • Acceso inmediato"
+                  : p.id === "plus"
+                  ? "3 días gratis • Sin tarjeta requerida"
                   : "Cancelás cuando quieras"}
               </p>
             </div>

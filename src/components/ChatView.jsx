@@ -8,6 +8,7 @@ import { getToken, getEmailFromToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
 import OnboardingTour from "./OnboardingTour";
+import PlanLimitModal from "./PlanLimitModal";
 
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
@@ -128,6 +129,8 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const [selectedModel, setSelectedModel] = useState("mth-mini");
   const [nudgeSuggestion, setNudgeSuggestion] = useState(null);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const [planLimitType, setPlanLimitType] = useState(null); // "messages" | "images" | null
+  const [userPlan, setUserPlan] = useState("free");
   const firstMessageRef = useRef(null);
   const isFirstMessage = useRef(true);
 
@@ -135,7 +138,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const isOverLimit = charCount >= MAX_CHARS;
   const isNearLimit = charCount >= MAX_CHARS * 0.9;
 
-  useEffect(() => { loadChats(); loadFolders(); loadModels(); }, []);
+  useEffect(() => { loadChats(); loadFolders(); loadModels(); loadUserPlan(); }, []);
 
   useEffect(() => {
     const chatId = searchParams.get("id");
@@ -171,6 +174,16 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       if (firstAvailable) setSelectedModel(firstAvailable.key);
     } catch (err) { console.error("Error cargando modelos:", err); }
   }
+  async function loadUserPlan() {
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/auth/user/profile`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) return;
+      const data = await res.json();
+      setUserPlan(data?.plan || "free");
+    } catch { /* silencioso */ }
+  }
+
 
   async function loadChats() {
     try {
@@ -309,7 +322,22 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       const response = await fetch(API_URL, {
         method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData,
       });
-      if (!response.ok) throw new Error(`Error ${response.status}`);
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        if (response.status === 429 || errData.error === "MESSAGES_LIMIT_REACHED") {
+          setPlanLimitType("messages");
+          setMessages((prev) => { const u = [...prev]; if (u[u.length-1]?.streaming) u.pop(); return u; });
+          setIsLoading(false);
+          return;
+        }
+        if (errData.error === "IMAGES_LIMIT_REACHED") {
+          setPlanLimitType("images");
+          setMessages((prev) => { const u = [...prev]; if (u[u.length-1]?.streaming) u.pop(); return u; });
+          setIsLoading(false);
+          return;
+        }
+        throw new Error(`Error ${response.status}`);
+      }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = ""; let accumulatedText = "";
@@ -367,6 +395,13 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
     <div className="chat-view">
       {/* Onboarding tour — se muestra solo la primera vez */}
       <OnboardingTour autoStart={true} />
+      {planLimitType && (
+        <PlanLimitModal
+          type={planLimitType}
+          plan={userPlan}
+          onClose={() => setPlanLimitType(null)}
+        />
+      )}
 
       {/* Overlay para cerrar sidebar en mobile tocando fuera */}
       {sidebarOpen && window.innerWidth < 768 && (
@@ -405,15 +440,16 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       </div>
 
       {/* Main */}
-      <div className="chat-main">
-        <div className="chat-messages" ref={chatMessagesRef}>
-          {messages.length === 0 && (
-            <div className="chat-empty">
-              <h2>¡Empezá una conversación!</h2>
-              <p>Escribí un problema matemático o pegá una imagen</p>
-            </div>
-          )}
+      <div className={`chat-main ${messages.length === 0 ? "chat-main--empty" : ""}`}>
 
+        {/* Pantalla vacía: título centrado sobre el input */}
+        {messages.length === 0 && (
+          <div className="chat-empty-hero">
+            <h2 className="chat-empty-hero__title">¿Cuál es el problema de hoy?</h2>
+          </div>
+        )}
+
+        <div className={`chat-messages ${messages.length === 0 ? "chat-messages--hidden" : ""}`} ref={chatMessagesRef}>
           {messages.map((msg, idx) => {
             if (!msg || typeof msg !== "object") return null;
             const content =
@@ -462,75 +498,114 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Folder popup manual */}
-        {currentChatId && messages.length > 0 && (
-          <div className={`folder-popup ${showFolderPopup ? "open" : ""}`}>
-            {!showFolderPopup ? (
-              <button className="folder-popup-trigger" onClick={() => setShowFolderPopup(true)} title="Agregar a carpeta">📁+</button>
-            ) : (
-              <div className="folder-popup-content">
-                <div className="folder-popup-header">
-                  <span>Agregar a carpeta</span>
-                  <button className="folder-popup-close" onClick={() => setShowFolderPopup(false)}>✕</button>
-                </div>
-                <div className="folder-popup-list">
-                  {folders.length === 0 && <p className="folder-popup-empty">No hay carpetas aún.</p>}
-                  {folders.map((folder) => (
-                    <div key={folder.id} className="folder-popup-item" onClick={() => assignToFolder(folder.id)}>
-                      <span className="folder-popup-icon">📁</span>
-                      <span className="folder-popup-name">{folder.name}</span>
-                      <span className="folder-popup-count">{folder.chatCount}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Input */}
-        <div className="chat-input-area">
+        <div className={`chat-input-area ${messages.length === 0 ? "chat-input-area--centered" : ""}`}>
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
+
           {imagePreview && (
             <div className="input-image-preview">
               <img src={imagePreview} alt="Imagen a enviar" />
               <button className="input-image-preview__remove" onClick={handleRemoveImage}>✕</button>
             </div>
           )}
-          <div className="chat-input-wrap">
-            <textarea
-              value={problemText}
-              onChange={(e) => setProblemText(e.target.value.slice(0, MAX_CHARS))}
-              onPaste={handlePaste}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSolve(); } }}
-              rows={3}
-              placeholder="Escribí tu problema matemático... (Enter para enviar)"
-              disabled={isLoading}
-              maxLength={MAX_CHARS}
-            />
-            <div className="char-counter" style={{
-              fontSize: "0.75rem", textAlign: "right", padding: "2px 4px",
-              color: isOverLimit ? "#e53935" : isNearLimit ? "#e57373" : "#888",
-              fontWeight: isNearLimit ? "600" : "normal",
-            }}>
-              {charCount}/{MAX_CHARS}
-            </div>
-            <div className="chat-input-actions">
-              <button
-                data-tour="attach"
-                type="button"
-                className="btn-attach"
-                onClick={() => fileInputRef.current?.click()}
+
+          {/* Layout: [cuadro textarea+toolbar] [📁] [→] */}
+          <div className="chat-input-row">
+
+            {/* Cuadro del textarea */}
+            <div className="chat-input-box">
+              <textarea
+                value={problemText}
+                onChange={(e) => setProblemText(e.target.value.slice(0, MAX_CHARS))}
+                onPaste={handlePaste}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSolve(); } }}
+                rows={messages.length === 0 ? 2 : 3}
+                placeholder="Escribí tu problema matemático..."
                 disabled={isLoading}
+                maxLength={MAX_CHARS}
+              />
+
+              {/* Barra inferior dentro del cuadro */}
+              <div className="chat-input-toolbar">
+                <button
+                  data-tour="attach"
+                  type="button"
+                  className="btn-toolbar"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading}
+                  title="Adjuntar imagen"
+                >
+                  📎 Adjuntar
+                </button>
+
+                <div data-tour="model-selector">
+                  <ModelSelector models={availableModels} selectedKey={selectedModel} onChange={setSelectedModel} />
+                </div>
+
+                <span className="char-counter-inline" style={{
+                  color: isOverLimit ? "#e53935" : isNearLimit ? "#e57373" : "rgba(255,255,255,0.22)",
+                  fontWeight: isNearLimit ? "600" : "normal",
+                }}>
+                  {charCount}/{MAX_CHARS}
+                </span>
+              </div>
+            </div>
+
+            {/* Botones fuera del cuadro */}
+            <div className="chat-input-side">
+              {/* Folder popup — solo cuando hay chat activo */}
+              {currentChatId && messages.length > 0 && (
+                <div className="folder-popup-inline">
+                  <button
+                    type="button"
+                    className="btn-side-icon"
+                    onClick={() => setShowFolderPopup((v) => !v)}
+                    title="Agregar a carpeta"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                  </button>
+                  {showFolderPopup && (
+                    <div className="folder-popup-content folder-popup-content--inline">
+                      <div className="folder-popup-header">
+                        <span>Agregar a carpeta</span>
+                        <button className="folder-popup-close" onClick={() => setShowFolderPopup(false)}>✕</button>
+                      </div>
+                      <div className="folder-popup-list">
+                        {folders.length === 0 && <p className="folder-popup-empty">No hay carpetas aún.</p>}
+                        {folders.map((folder) => (
+                          <div key={folder.id} className="folder-popup-item" onClick={() => assignToFolder(folder.id)}>
+                            <span className="folder-popup-icon">📁</span>
+                            <span className="folder-popup-name">{folder.name}</span>
+                            <span className="folder-popup-count">{folder.chatCount}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Botón enviar — icon destacado */}
+              <button
+                onClick={handleSolve}
+                disabled={isLoading || !problemText.trim() || isOverLimit}
+                className="btn-send-icon"
+                title="Enviar"
               >
-                📎
-              </button>
-              <ModelSelector models={availableModels} selectedKey={selectedModel} onChange={setSelectedModel} />
-              <button onClick={handleSolve} disabled={isLoading || !problemText.trim() || isOverLimit} className="btn-send">
-                {isLoading ? "..." : "Enviar"}
+                {isLoading
+                  ? <span className="btn-send-icon__spinner" />
+                  : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="22" y1="2" x2="11" y2="13"/>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                }
               </button>
             </div>
-          </div>
+
+          </div>{/* end chat-input-row */}
+
           <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
             onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
         </div>

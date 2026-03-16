@@ -765,3 +765,267 @@
   color: #f59e0b;
   font-weight: 600;
 }
+/* ===== PLAN LIMIT MODAL ===== */
+.plan-limit-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+  animation: plFadeIn 200ms ease;
+}
+
+@keyframes plFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.plan-limit-modal {
+  background: linear-gradient(180deg, rgba(22,22,36,0.99), rgba(14,14,24,0.99));
+  border: 1px solid rgba(124,92,255,0.35);
+  border-radius: 22px;
+  padding: 32px 28px 28px;
+  width: 90%;
+  max-width: 420px;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,92,255,0.12);
+  animation: plSlideIn 280ms cubic-bezier(0.34,1.2,0.64,1);
+  text-align: center;
+}
+
+@keyframes plSlideIn {
+  from { opacity: 0; transform: scale(0.92) translateY(16px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+
+.plan-limit-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  transition: all 140ms ease;
+}
+
+.plan-limit-close:hover {
+  background: rgba(255,70,70,0.2);
+  border-color: rgba(255,70,70,0.4);
+  color: #fff;
+}
+
+.plan-limit-icon {
+  font-size: 44px;
+  margin-bottom: 14px;
+  filter: drop-shadow(0 0 16px rgba(124,92,255,0.5));
+}
+
+.plan-limit-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 10px;
+}
+
+.plan-limit-desc {
+  font-size: 14px;
+  color: rgba(255,255,255,0.6);
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+
+.plan-limit-upgrade-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(124,92,255,0.18), rgba(90,62,224,0.10));
+  border: 1px solid rgba(124,92,255,0.4);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.plan-limit-upgrade-box__glow {
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 80px;
+  height: 80px;
+  background: radial-gradient(circle, rgba(124,92,255,0.4), transparent 70%);
+  pointer-events: none;
+}
+
+.plan-limit-upgrade-box__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plan-limit-upgrade-box__icon {
+  font-size: 22px;
+  filter: drop-shadow(0 0 6px rgba(124,92,255,0.7));
+}
+
+.plan-limit-upgrade-box__title {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.plan-limit-upgrade-box__price {
+  display: block;
+  font-size: 12px;
+  color: rgba(180,160,255,0.8);
+  margin-top: 1px;
+}
+
+.plan-limit-upgrade-box__arrow {
+  font-size: 18px;
+  color: rgba(124,92,255,0.9);
+}
+
+.plan-limit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-limit-btn {
+  width: 100%;
+  padding: 11px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 160ms ease;
+  border: none;
+}
+
+.plan-limit-btn--primary {
+  background: linear-gradient(135deg, #7c5cff, #5a3ee0);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(124,92,255,0.35);
+}
+
+.plan-limit-btn--primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(124,92,255,0.45);
+}
+
+.plan-limit-btn--ghost {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,255,255,0.1) !important;
+}
+
+.plan-limit-btn--ghost:hover {
+  background: rgba(255,255,255,0.10);
+  color: rgba(255,255,255,0.75);
+}
+
+/* ===== CARPETAS BLOQUEADAS ===== */
+.folder-card--locked {
+  position: relative;
+  min-height: 200px; /* altura fija para que los botones absolutos tengan espacio */
+}
+
+/* Contenido borroso — solo el interior, no los botones */
+.folder-card__blur-content {
+  filter: blur(2.5px) grayscale(0.45);
+  opacity: 0.55;
+  pointer-events: none;
+  /* ocupa todo el espacio de la card */
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-radius: inherit;
+}
+
+/* Badge candado — nítido */
+.folder-lock-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0,0,0,0.75);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  z-index: 3;
+  pointer-events: auto;
+}
+
+.folder-lock-badge__icon { font-size: 13px; }
+
+/* Botones — nítidos, encima de todo */
+.folder-locked-actions {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  z-index: 3;
+  pointer-events: auto;
+}
+
+.folder-locked-btn {
+  flex: 1;
+  padding: 7px 10px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 150ms ease;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.folder-locked-btn--upgrade {
+  background: linear-gradient(135deg, #7c5cff, #5a3ee0);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(124,92,255,0.3);
+}
+
+.folder-locked-btn--upgrade:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.folder-locked-btn--delete {
+  background: rgba(239,68,68,0.18);
+  color: rgba(255,120,120,0.9);
+  border: 1px solid rgba(239,68,68,0.3) !important;
+}
+
+.folder-locked-btn--delete:hover {
+  background: rgba(239,68,68,0.32);
+  color: #fff;
+}

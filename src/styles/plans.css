@@ -266,3 +266,35 @@
   text-align: center;
   margin: 0;
 }
+/* ── Agregar esto en plans.css ── */
+
+/* Wrapper para alinear ambos badges juntos */
+.plans-page-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+  min-height: 28px;
+}
+
+/* Badge naranja de prueba gratis */
+.plans-page-trial-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.22), rgba(255, 100, 0, 0.12));
+  border: 1px solid rgba(255, 140, 0, 0.55);
+  color: #ffaa40;
+  box-shadow: 0 0 12px rgba(255, 140, 0, 0.18);
+  animation: trialPulse 2.8s ease-in-out infinite;
+}
+
+@keyframes trialPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 140, 0, 0.18); }
+  50%       { box-shadow: 0 0 22px rgba(255, 140, 0, 0.40); }
+}
