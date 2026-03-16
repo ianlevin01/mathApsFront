@@ -27,7 +27,6 @@ import "./styles/plans.css";
 import "./styles/chat_additions.css";
 import "./index.css";
 import "katex/dist/katex.min.css";
-
 const PLANS = [
   {
     id: "free",
@@ -142,8 +141,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // ← NUEVO
-
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
   useEffect(() => {
     const token = getToken();
     setIsAuthenticated(!!token);

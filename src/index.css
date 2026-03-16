@@ -2128,3 +2128,43 @@ section {
   margin-top: -8px;
   margin-bottom: 4px;
 }
+/* =========================================================
+   MOBILE FIXES
+========================================================= */
+
+/* Ocultar brand en mobile cuando estás en el chat */
+@media (max-width: 767px) {
+  .brand--hide-mobile {
+    display: none;
+  }
+}
+
+/* Fix iOS Safari: el sidebar queda tapado por la barra del navegador.
+   100vh en iOS incluye la barra de navegación, entonces usamos
+   dvh (dynamic viewport height) que la excluye. */
+@supports (height: 100dvh) {
+  @media (max-width: 767px) {
+    .chat-sidebar {
+      height: calc(100dvh - 52px) !important;
+    }
+
+    .chat-view,
+    .folder-chat-view {
+      height: 100dvh !important;
+    }
+  }
+}
+
+/* Fallback para iOS más viejos sin dvh: usar -webkit-fill-available */
+@supports not (height: 100dvh) {
+  @media (max-width: 767px) {
+    .chat-view,
+    .folder-chat-view {
+      height: -webkit-fill-available !important;
+    }
+
+    .chat-sidebar {
+      height: calc(-webkit-fill-available - 52px) !important;
+    }
+  }
+}

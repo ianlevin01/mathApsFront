@@ -13,7 +13,6 @@ export default function Header({ isAuthenticated, onLogin, onLogout, sidebarOpen
 
   const isChat = location.pathname === "/chat" || location.pathname.startsWith("/folder/");
 
-  /* close on outside click */
   useEffect(() => {
     function handleClick(e) {
       if (dropRef.current && !dropRef.current.contains(e.target)) {
@@ -38,7 +37,7 @@ export default function Header({ isAuthenticated, onLogin, onLogout, sidebarOpen
     <header className="header">
       <div className="header-inner">
 
-        {/* Hamburguesa — solo visible en /chat */}
+        {/* Hamburguesa — solo visible en /chat y /folder */}
         {isAuthenticated && isChat && setSidebarOpen && (
           <button
             data-tour="hamburger"
@@ -55,8 +54,8 @@ export default function Header({ isAuthenticated, onLogin, onLogout, sidebarOpen
           </button>
         )}
 
-        {/* Brand */}
-        <div className="brand">
+        {/* Brand — oculto en mobile cuando estás en chat */}
+        <div className={`brand ${isChat ? "brand--hide-mobile" : ""}`}>
           <div className="logo">
             <img
               src="/logo.svg"
@@ -98,7 +97,6 @@ export default function Header({ isAuthenticated, onLogin, onLogout, sidebarOpen
 
                 {open && (
                   <div className="nav-dropdown">
-                    {/* header */}
                     <div className="nav-dropdown-header">
                       <div className="nav-dropdown-avatar">{initials}</div>
                       <div>
