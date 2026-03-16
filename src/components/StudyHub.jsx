@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { getToken, getEmailFromToken } from "../auth";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
@@ -817,7 +817,6 @@ function StreakCard({ racha, onStartExam, loading }) {
 // ── Main ────────────────────────────────────────────────────────────────────
 export default function StudyHub() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [view, setView] = useState("folders");
   const [folders, setFolders] = useState([]);
   const [selectedFolder, setSelectedFolder] = useState(null);
@@ -879,7 +878,7 @@ export default function StudyHub() {
     }
     initLoad();
   }, []);
-  useEffect(() => { loadFolders(); loadAllChats(); }, [location.pathname]);
+
 
   async function loadUserProfile() {
     try {
