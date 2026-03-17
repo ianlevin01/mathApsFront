@@ -9,6 +9,7 @@ import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
 import OnboardingTour from "./OnboardingTour";
 import PlanLimitModal from "./PlanLimitModal";
+import MathKeyboard from "./MathKeyboard";
 
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
@@ -129,7 +130,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const [selectedModel, setSelectedModel] = useState("mth-mini");
   const [nudgeSuggestion, setNudgeSuggestion] = useState(null);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
-  const [planLimitType, setPlanLimitType] = useState(null); // "messages" | "images" | null
+  const [planLimitType, setPlanLimitType] = useState(null);
   const [userPlan, setUserPlan] = useState("free");
   const firstMessageRef = useRef(null);
   const isFirstMessage = useRef(true);
@@ -174,6 +175,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       if (firstAvailable) setSelectedModel(firstAvailable.key);
     } catch (err) { console.error("Error cargando modelos:", err); }
   }
+
   async function loadUserPlan() {
     try {
       const token = getToken?.() || "";
@@ -183,7 +185,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       setUserPlan(data?.plan || "free");
     } catch { /* silencioso */ }
   }
-
 
   async function loadChats() {
     try {
@@ -393,7 +394,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
 
   return (
     <div className="chat-view">
-      {/* Onboarding tour — se muestra solo la primera vez */}
       <OnboardingTour autoStart={true} />
       {planLimitType && (
         <PlanLimitModal
@@ -403,7 +403,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
         />
       )}
 
-      {/* Overlay para cerrar sidebar en mobile tocando fuera */}
       {sidebarOpen && window.innerWidth < 768 && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
@@ -442,7 +441,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       {/* Main */}
       <div className={`chat-main ${messages.length === 0 ? "chat-main--empty" : ""}`}>
 
-        {/* Pantalla vacía: título centrado sobre el input */}
         {messages.length === 0 && (
           <div className="chat-empty-hero">
             <h2 className="chat-empty-hero__title">¿Cuál es el problema de hoy?</h2>
@@ -509,10 +507,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
             </div>
           )}
 
-          {/* Layout: [cuadro textarea+toolbar] [📁] [→] */}
           <div className="chat-input-row">
-
-            {/* Cuadro del textarea */}
             <div className="chat-input-box">
               <textarea
                 value={problemText}
@@ -525,7 +520,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
                 maxLength={MAX_CHARS}
               />
 
-              {/* Barra inferior dentro del cuadro */}
+              {/* Toolbar */}
               <div className="chat-input-toolbar">
                 <button
                   data-tour="attach"
@@ -537,6 +532,11 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
                 >
                   📎 Adjuntar
                 </button>
+
+                {/* ── Teclado matemático ── */}
+                <MathKeyboard
+                  onInsert={(sym) => setProblemText((prev) => (prev + sym).slice(0, MAX_CHARS))}
+                />
 
                 <div data-tour="model-selector">
                   <ModelSelector models={availableModels} selectedKey={selectedModel} onChange={setSelectedModel} />
@@ -553,7 +553,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
 
             {/* Botones fuera del cuadro */}
             <div className="chat-input-side">
-              {/* Folder popup — solo cuando hay chat activo */}
               {currentChatId && messages.length > 0 && (
                 <div className="folder-popup-inline">
                   <button
@@ -587,7 +586,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
                 </div>
               )}
 
-              {/* Botón enviar — icon destacado */}
               <button
                 onClick={handleSolve}
                 disabled={isLoading || !problemText.trim() || isOverLimit}
@@ -604,7 +602,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
               </button>
             </div>
 
-          </div>{/* end chat-input-row */}
+          </div>
 
           <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
             onChange={(e) => setImageFile(e.target.files?.[0] || null)} />

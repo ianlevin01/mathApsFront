@@ -8,6 +8,7 @@ import { getToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
 import PlanLimitModal from "./PlanLimitModal";
+import MathKeyboard from "./MathKeyboard";
 
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
@@ -86,7 +87,6 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("mth-mini");
 
-  // Plan limit
   const [planLimitType, setPlanLimitType] = useState(null);
   const [userPlan, setUserPlan] = useState("free");
 
@@ -302,7 +302,6 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
 
   return (
     <div className="folder-chat-view">
-      {/* Plan limit modal */}
       {planLimitType && (
         <PlanLimitModal
           type={planLimitType}
@@ -311,7 +310,6 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
         />
       )}
 
-      {/* Overlay mobile */}
       {sidebarOpen && window.innerWidth < 768 && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
@@ -354,7 +352,6 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
       {/* Main */}
       <div className={`chat-main ${messages.length === 0 ? "chat-main--empty" : ""}`}>
 
-        {/* Hero vacío */}
         {messages.length === 0 && (
           <div className="chat-empty-hero">
             <h2 className="chat-empty-hero__title">¿Cuál es el problema de hoy?</h2>
@@ -407,7 +404,7 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input — mismo layout que ChatView */}
+        {/* Input */}
         <div className={`chat-input-area ${messages.length === 0 ? "chat-input-area--centered" : ""}`}>
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
 
@@ -431,6 +428,8 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
                 disabled={isLoading}
                 maxLength={MAX_CHARS}
               />
+
+              {/* Toolbar */}
               <div className="chat-input-toolbar">
                 <button
                   data-tour="attach"
@@ -442,9 +441,16 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
                 >
                   📎 Adjuntar
                 </button>
+
+                {/* ── Teclado matemático ── */}
+                <MathKeyboard
+                  onInsert={(sym) => setProblemText((prev) => (prev + sym).slice(0, MAX_CHARS))}
+                />
+
                 <div data-tour="model-selector">
                   <ModelSelector models={availableModels} selectedKey={selectedModel} onChange={setSelectedModel} />
                 </div>
+
                 <span className="char-counter-inline" style={{
                   color: isOverLimit ? "#e53935" : isNearLimit ? "#e57373" : "rgba(255,255,255,0.22)",
                   fontWeight: isNearLimit ? "600" : "normal",
@@ -456,7 +462,6 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
 
             {/* Botones fuera del cuadro */}
             <div className="chat-input-side">
-              {/* Botón enviar */}
               <button
                 onClick={handleSolve}
                 disabled={isLoading || !problemText.trim() || isOverLimit}
