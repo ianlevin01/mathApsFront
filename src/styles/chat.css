@@ -944,4 +944,40 @@
 .model-selector__dropdown {
   z-index: 9999;
 }
- 
+ /* Scrollbar del sidebar */
+.chat-list {
+  direction: rtl; /* mueve la scrollbar a la izquierda */
+}
+
+.chat-list .chat-item {
+  direction: ltr; /* mantiene el texto normal */
+}
+
+.chat-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-list::-webkit-scrollbar-track {
+  background: rgba(124, 92, 255, 0.05);
+  border-radius: 999px;
+}
+
+.chat-list::-webkit-scrollbar-thumb {
+  background: rgba(124, 92, 255, 0.35);
+  border-radius: 999px;
+}
+
+.chat-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(124, 92, 255, 0.6);
+}
+@media (min-width: 1024px) {
+  .chat-sidebar {
+    width: 380px;
+    min-width: 380px;
+    max-width: 380px;
+  }
+
+  .chat-sidebar.closed {
+    margin-left: -380px;
+  }
+}
