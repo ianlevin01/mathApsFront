@@ -982,3 +982,44 @@
     margin-left: -380px;
   }
 }
+@media (max-width: 768px) {
+  /* Ocultar texto, dejar solo íconos */
+  .btn-toolbar span,
+  .btn-toolbar .mk-label {
+    display: none;
+  }
+
+  /* Achicar botones del toolbar */
+  .btn-toolbar {
+    padding: 5px 6px;
+    font-size: 14px;
+  }
+
+  /* Achicar el selector de modelo */
+  .model-selector__trigger {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .model-selector__cost,
+  .model-selector__chevron {
+    display: none;
+  }
+
+  /* Achicar contador */
+  .char-counter-inline {
+    font-size: 10px;
+  }
+}
+.mk-label {
+  display: inline;
+}
+@media (max-width: 768px) {
+  .mk-label {
+    display: none;
+  }
+
+  .btn-toolbar span {
+    display: none;
+  }
+}

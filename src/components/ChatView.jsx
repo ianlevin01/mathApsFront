@@ -530,7 +530,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
                   disabled={isLoading}
                   title="Adjuntar imagen"
                 >
-                  📎 Adjuntar
+                  📎 <span>Adjuntar</span>
                 </button>
 
                 {/* ── Teclado matemático ── */}

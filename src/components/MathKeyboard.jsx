@@ -304,18 +304,22 @@ export default function MathKeyboard({ textareaRef, onInsert }) {
         }
 
         /* Mobile: anclar al centro en pantallas pequeñas */
-        @media (max-width: 480px) {
-          .mk-popup {
-            left: 50%;
-            transform-origin: bottom center;
-            translate: -50% 0;
-            width: 94vw;
-          }
-          @keyframes mkPopIn {
-            from { opacity: 0; transform: scale(0.92) translateY(8px); translate: -50% 0; }
-            to   { opacity: 1; transform: scale(1)    translateY(0);   translate: -50% 0; }
-          }
-        }
+        @media (max-width: 768px) {
+  .mk-popup {
+    position: fixed;
+    bottom: 80px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    transform: none;
+    transform-origin: bottom center;
+  }
+
+  @keyframes mkPopIn {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to   { opacity: 1; transform: scale(1)    translateY(0);   }
+  }
+}
       `}</style>
 
       <div className="mk-wrap">
@@ -331,7 +335,7 @@ export default function MathKeyboard({ textareaRef, onInsert }) {
             <path d="M4 7h16M4 12h10M4 17h7"/>
             <path d="M19 12l-3 5h6l-3-5z"/>
           </svg>
-          Σ Símbolos
+          Σ <span>Simbolos</span>
         </button>
 
         {/* Popup */}
