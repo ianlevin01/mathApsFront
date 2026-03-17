@@ -622,7 +622,7 @@ function CalculatorDemo({ onLogin }) {
             </span>
           )}
           <button className="lp-btn lp-btn--primary calc-demo__send" onClick={handleSolve} disabled={isLoading || !problemText.trim()} type="button">
-            {isLoading ? <span className="calc-demo__spinner" /> : "Resolver →;"}
+            {isLoading ? <span className="calc-demo__spinner" /> : "Resolver →"}
           </button>
         </div>
       </div>
