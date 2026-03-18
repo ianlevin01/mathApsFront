@@ -162,41 +162,17 @@
 }
 
 /* =========================================================
-   LOADING SCREEN
+   LOADING SCREEN  ← FIX PRINCIPAL
 ========================================================= */
 .fc-loading {
-  position: relative;
-  z-index: 1;
+  position: fixed;          /* ocupa toda la pantalla */
+  inset: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-}
-
-.fc-spinner {
-  width: 56px;
-  height: 56px;
-  border: 3px solid rgba(124,92,255,0.20);
-  border-top-color: #7c5cff;
-  border-radius: 50%;
-  animation: spin 800ms linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.fc-loading-text {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.fc-loading-sub {
-  margin: 0;
-  font-size: 14px;
-  color: rgba(255,255,255,0.50);
+  justify-content: center;  /* centra verticalmente */
+  padding: 40px 20px;
 }
 
 /* =========================================================
@@ -320,7 +296,6 @@
   cursor: not-allowed;
 }
 
-/* ✅ CORRECTA */
 .fc-option--correct {
   background: rgba(34, 197, 94, 0.14) !important;
   border-color: rgba(34, 197, 94, 0.60) !important;
@@ -335,7 +310,6 @@
   100% { transform: scale(1); }
 }
 
-/* ❌ INCORRECTA (elegida) */
 .fc-option--wrong {
   background: rgba(239, 68, 68, 0.14) !important;
   border-color: rgba(239, 68, 68, 0.60) !important;
@@ -352,12 +326,10 @@
   80% { transform: translateX(4px); }
 }
 
-/* Dimmed (las otras opciones) */
 .fc-option--dim {
   opacity: 0.38 !important;
 }
 
-/* Letra de la opción (A B C D) */
 .fc-opt-letter {
   min-width: 30px;
   height: 30px;
@@ -437,9 +409,7 @@
   margin-bottom: 10px;
 }
 
-.fc-feedback-icon {
-  font-size: 22px;
-}
+.fc-feedback-icon { font-size: 22px; }
 
 .fc-feedback-title {
   font-size: 17px;
@@ -562,7 +532,6 @@
   letter-spacing: -0.03em;
 }
 
-/* Barra de resultado */
 .fc-done-bar-wrap {
   width: 100%;
   height: 8px;
@@ -588,7 +557,6 @@
   font-weight: 600;
 }
 
-/* Resumen de respuestas */
 .fc-done-results {
   width: 100%;
   display: flex;
@@ -658,7 +626,6 @@
   background: rgba(255,255,255,0.10);
 }
 
-/* Scrollbar */
 .fc-done-results::-webkit-scrollbar { width: 4px; }
 .fc-done-results::-webkit-scrollbar-track { background: transparent; }
 .fc-done-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
@@ -674,57 +641,17 @@
   .fc-done-num { font-size: 52px; }
   .fc-idle-card { padding: 36px 24px; }
 }
+
 /* =========================================================
-   AÑADIR AL FINAL DE flashcards.css
-   Soporte para renderizado LaTeX con KaTeX
+   KaTeX
 ========================================================= */
-
-/* ── Pregunta ── */
-.fc-question .katex-display {
-  margin: 0.5em 0;
-  overflow-x: auto;
-}
-/* ReactMarkdown envuelve en <p>, lo aplanamos a inline */
-.fc-question > span > p {
-  display: inline;
-  margin: 0;
-}
-
-/* ── Opciones ── */
-.fc-opt-text .katex {
-  font-size: 0.95em;
-}
-/* Aplanar el <p> que genera ReactMarkdown dentro del botón */
-.fc-opt-text > p {
-  display: inline;
-  margin: 0;
-}
-.fc-opt-text .katex-display {
-  display: inline-block;
-  margin: 0;
-}
-
-/* ── Explicación del feedback ── */
-.fc-feedback-explanation .katex-display {
-  margin: 0.4em 0;
-  overflow-x: auto;
-}
-.fc-feedback-explanation > span > p {
-  display: inline;
-  margin: 0;
-}
-
-/* ── Resumen de la pantalla DONE ── */
-.fc-done-row-q .katex {
-  font-size: 0.88em;
-}
-.fc-done-row-q > span > p {
-  display: inline;
-  margin: 0;
-}
-.fc-done-row-q .katex-display {
-  display: inline-block;
-  margin: 0;
-  overflow-x: auto;
-  max-width: 100%;
-}
+.fc-question .katex-display { margin: 0.5em 0; overflow-x: auto; }
+.fc-question > span > p { display: inline; margin: 0; }
+.fc-opt-text .katex { font-size: 0.95em; }
+.fc-opt-text > p { display: inline; margin: 0; }
+.fc-opt-text .katex-display { display: inline-block; margin: 0; }
+.fc-feedback-explanation .katex-display { margin: 0.4em 0; overflow-x: auto; }
+.fc-feedback-explanation > span > p { display: inline; margin: 0; }
+.fc-done-row-q .katex { font-size: 0.88em; }
+.fc-done-row-q > span > p { display: inline; margin: 0; }
+.fc-done-row-q .katex-display { display: inline-block; margin: 0; overflow-x: auto; max-width: 100%; }

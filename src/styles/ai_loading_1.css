@@ -1,0 +1,104 @@
+/* ===== AI LOADING BAR (compartido entre Flashcards y DevQuestions) ===== */
+
+.ai-loading-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+  padding: 16px 0;
+  animation: aiLoadFadeIn 350ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes aiLoadFadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ai-loading-icon {
+  font-size: 48px;
+  line-height: 1;
+  display: block;
+  animation: aiIconFloat 2.6s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes aiIconFloat {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-7px); }
+}
+
+/* Fila barra + porcentaje */
+.ai-loading-bar-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Barra de fondo */
+.ai-loading-bar-bg {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;   /* shimmer se recorta acá, el % queda FUERA */
+}
+
+/* Relleno */
+.ai-loading-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(124, 92, 255, 0.9);
+}
+
+/* Shimmer */
+.ai-loading-bar-shimmer {
+  position: absolute;
+  top: 0;
+  left: -80%;
+  width: 80%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  animation: aiShimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes aiShimmer {
+  0%   { left: -80%; }
+  100% { left: 110%; }
+}
+
+/* Porcentaje — hermano de .ai-loading-bar-bg, NO hijo */
+.ai-loading-bar-pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.80);
+  letter-spacing: 0.03em;
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Frase rotativa */
+.ai-loading-phrase {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.65);
+  text-align: center;
+  min-height: 22px;
+  letter-spacing: 0.01em;
+  margin: 0;
+}

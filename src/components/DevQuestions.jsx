@@ -1,12 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getToken } from "../auth";
 import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import PlanLimitModal from "./PlanLimitModal";
+import MathKeyboard from "./MathKeyboard";
 import "katex/dist/katex.min.css";
 import "../styles/devquestions.css";
+import "../styles/ai_loading_1.css";
 
 const API_BASE = "https://api.mathaps.online";
 
@@ -52,6 +54,93 @@ function ScoreRing({ score }) {
   );
 }
 
+const PHRASES = {
+  generating: [
+    "Analizando tus chats...",
+    "Consultando tus archivos de estudio...",
+    "Identificando los temas más relevantes...",
+    "Procesando el material de la carpeta...",
+    "Revisando tus resoluciones previas...",
+    "Buscando un ejercicio desafiante...",
+    "Construyendo el contexto de la pregunta...",
+    "Seleccionando el nivel de dificultad...",
+    "Preparando la pregunta...",
+    "Casi listo...",
+  ],
+  correcting: [
+    "Leyendo tu respuesta...",
+    "Analizando el desarrollo paso a paso...",
+    "Verificando los conceptos aplicados...",
+    "Revisando si la corrección es precisa...",
+    "Comparando con las resoluciones del ejercicio...",
+    "Analizando las diversas resoluciones posibles...",
+    "Evaluando la precisión matemática...",
+    "Chequeando el razonamiento utilizado...",
+    "Calculando el puntaje...",
+    "Preparando el feedback...",
+  ],
+};
+
+function LoadingBar({ phrases, icon = "✍️", accentColor = "rgba(124,92,255,0.9)", done = false }) {
+  const [phraseIdx, setPhraseIdx] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const [progress, setProgress] = useState(8);
+  const intervalRef = useRef(null);
+  const progressRef = useRef(null);
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setPhraseIdx((i) => (i + 1) % phrases.length);
+        setVisible(true);
+      }, 350);
+    }, 2200);
+    return () => clearInterval(intervalRef.current);
+  }, [phrases]);
+
+  useEffect(() => {
+    if (done) {
+      setProgress(100);
+      return;
+    }
+    progressRef.current = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 85) return p;
+        const step = p < 40 ? 3 : p < 65 ? 1.5 : 0.5;
+        return Math.min(p + step, 85);
+      });
+    }, 180);
+    return () => clearInterval(progressRef.current);
+  }, [done]);
+
+  return (
+    <div className="ai-loading-wrap">
+      <div className="ai-loading-icon">{icon}</div>
+      <div className="ai-loading-bar-row">
+        <div className="ai-loading-bar-bg">
+          <div
+            className="ai-loading-bar-fill"
+            style={{
+              width: `${progress}%`,
+              transition: done ? "width 400ms ease" : "width 180ms ease",
+              background: accentColor,
+            }}
+          />
+          <div className="ai-loading-bar-shimmer" />
+        </div>
+        <span className="ai-loading-bar-pct">{Math.round(progress)}%</span>
+      </div>
+      <p
+        className="ai-loading-phrase"
+        style={{ opacity: visible ? 1 : 0, transition: "opacity 350ms ease" }}
+      >
+        {done ? "¡Listo!" : phrases[phraseIdx]}
+      </p>
+    </div>
+  );
+}
+
 export default function DevQuestions() {
   const { folderId } = useParams();
   const navigate = useNavigate();
@@ -63,9 +152,13 @@ export default function DevQuestions() {
   const [sessionResults, setSessionResults] = useState([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [error, setError] = useState("");
+  const [loadingDone, setLoadingDone] = useState(false);
 
   const [showLimit, setShowLimit] = useState(false);
   const [userPlan, setUserPlan] = useState("free");
+
+  // ref para que MathKeyboard pueda insertar en el textarea
+  const textareaRef = useRef(null);
 
   const MAX_QUESTIONS = 5;
 
@@ -87,6 +180,7 @@ export default function DevQuestions() {
 
   async function fetchQuestion() {
     setPhase("loading");
+    setLoadingDone(false);
     setError("");
     setAnswer("");
     setCorrection(null);
@@ -101,11 +195,11 @@ export default function DevQuestions() {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         if (
-  res.status === 403 ||
-  res.status === 429 ||
-  errData.error === "EXERCISES_LIMIT_REACHED" ||
-  errData.error === "LIMIT_REACHED"
-)  {
+          res.status === 403 ||
+          res.status === 429 ||
+          errData.error === "EXERCISES_LIMIT_REACHED" ||
+          errData.error === "LIMIT_REACHED"
+        ) {
           setShowLimit(true);
           setPhase("idle");
           return;
@@ -114,9 +208,12 @@ export default function DevQuestions() {
       }
 
       const data = await res.json();
-      setQuestion(data);
-      setQuestionCount((c) => c + 1);
-      setPhase("answering");
+      setLoadingDone(true);
+      setTimeout(() => {
+        setQuestion(data);
+        setQuestionCount((c) => c + 1);
+        setPhase("answering");
+      }, 500);
     } catch (err) {
       console.error(err);
       setError("No se pudo generar la pregunta. Intentá de nuevo.");
@@ -127,6 +224,7 @@ export default function DevQuestions() {
   async function submitAnswer() {
     if (!answer.trim()) return;
     setPhase("correcting");
+    setLoadingDone(false);
     setError("");
     try {
       const token = getToken() || "";
@@ -137,9 +235,12 @@ export default function DevQuestions() {
       });
       if (!res.ok) throw new Error("Error corrigiendo respuesta");
       const data = await res.json();
-      setCorrection(data);
-      setSessionResults((prev) => [...prev, { question: question.question, score: data.score, answer }]);
-      setPhase("result");
+      setLoadingDone(true);
+      setTimeout(() => {
+        setCorrection(data);
+        setSessionResults((prev) => [...prev, { question: question.question, score: data.score, answer }]);
+        setPhase("result");
+      }, 500);
     } catch (err) {
       console.error(err);
       setError("No se pudo obtener la corrección. Intentá de nuevo.");
@@ -160,6 +261,7 @@ export default function DevQuestions() {
     setSessionResults([]);
     setQuestionCount(0);
     setError("");
+    setLoadingDone(false);
   }
 
   const avgScore =
@@ -171,13 +273,7 @@ export default function DevQuestions() {
   if (phase === "idle") {
     return (
       <div className="dq-shell">
-        {showLimit && (
-          <PlanLimitModal
-            type="devquestions"
-            plan={userPlan}
-            onClose={() => setShowLimit(false)}
-          />
-        )}
+        {showLimit && <PlanLimitModal type="devquestions" plan={userPlan} onClose={() => setShowLimit(false)} />}
         <div className="dq-bg-orb dq-bg-orb--1" />
         <div className="dq-bg-orb dq-bg-orb--2" />
         <button className="dq-back" onClick={() => navigate(-1)}>← Volver a la carpeta</button>
@@ -207,9 +303,12 @@ export default function DevQuestions() {
         <div className="dq-bg-orb dq-bg-orb--1" />
         <div className="dq-bg-orb dq-bg-orb--2" />
         <div className="dq-loading">
-          <div className="dq-spinner" />
-          <p className="dq-loading-text">Generando pregunta...</p>
-          <p className="dq-loading-sub">Analizando tus chats</p>
+          <LoadingBar
+            phrases={PHRASES.generating}
+            icon="✍️"
+            accentColor="rgba(124,92,255,0.9)"
+            done={loadingDone}
+          />
         </div>
       </div>
     );
@@ -222,9 +321,12 @@ export default function DevQuestions() {
         <div className="dq-bg-orb dq-bg-orb--1" />
         <div className="dq-bg-orb dq-bg-orb--2" />
         <div className="dq-loading">
-          <div className="dq-spinner dq-spinner--green" />
-          <p className="dq-loading-text">Corrigiendo tu respuesta...</p>
-          <p className="dq-loading-sub">La IA está evaluando tu desarrollo</p>
+          <LoadingBar
+            phrases={PHRASES.correcting}
+            icon="🔍"
+            accentColor="rgba(34,197,94,0.9)"
+            done={loadingDone}
+          />
         </div>
       </div>
     );
@@ -271,13 +373,7 @@ export default function DevQuestions() {
   /* ── ANSWERING / RESULT ── */
   return (
     <div className="dq-shell">
-      {showLimit && (
-        <PlanLimitModal
-          type="devquestions"
-          plan={userPlan}
-          onClose={() => setShowLimit(false)}
-        />
-      )}
+      {showLimit && <PlanLimitModal type="devquestions" plan={userPlan} onClose={() => setShowLimit(false)} />}
       <div className="dq-bg-orb dq-bg-orb--1" />
       <div className="dq-bg-orb dq-bg-orb--2" />
       <div className="dq-header">
@@ -307,6 +403,7 @@ export default function DevQuestions() {
           <div className="dq-answer-wrap">
             <label className="dq-answer-label">Tu respuesta</label>
             <textarea
+              ref={textareaRef}
               className="dq-answer-textarea"
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
@@ -314,6 +411,13 @@ export default function DevQuestions() {
               rows={6}
               autoFocus
             />
+            {/* ── Toolbar con teclado matemático ── */}
+            <div className="dq-answer-toolbar">
+              <MathKeyboard
+                textareaRef={textareaRef}
+                onInsert={(sym) => setAnswer((prev) => prev + sym)}
+              />
+            </div>
             {error && <p className="dq-error">{error}</p>}
             <button className="dq-submit-btn" onClick={submitAnswer} disabled={!answer.trim()}>
               Enviar respuesta →
@@ -325,11 +429,7 @@ export default function DevQuestions() {
             <div className="dq-result-score-row">
               <ScoreRing score={correction.score} />
               <div className="dq-result-verdict">
-                <span className={`dq-verdict-badge ${
-                  correction.score >= 8 ? "dq-verdict--great"
-                  : correction.score >= 5 ? "dq-verdict--ok"
-                  : "dq-verdict--bad"
-                }`}>
+                <span className={`dq-verdict-badge ${correction.score >= 8 ? "dq-verdict--great" : correction.score >= 5 ? "dq-verdict--ok" : "dq-verdict--bad"}`}>
                   {correction.score >= 8 ? "🎉 Excelente" : correction.score >= 5 ? "👍 Bien" : "📖 Revisar"}
                 </span>
               </div>

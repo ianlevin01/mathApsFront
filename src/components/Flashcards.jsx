@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getToken } from "../auth";
 import { useParams, useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
@@ -8,6 +8,7 @@ import { normalizeMath } from "../utils/mathUtils";
 import PlanLimitModal from "./PlanLimitModal";
 import "katex/dist/katex.min.css";
 import "../styles/flashcards.css";
+import "../styles/ai_loading_1.css";
 
 function MathText({ children, className }) {
   return (
@@ -20,6 +21,84 @@ function MathText({ children, className }) {
         {normalizeMath(children ?? "")}
       </ReactMarkdown>
     </span>
+  );
+}
+
+const PHRASES = {
+  generating: [
+    "Analizando tus chats...",
+    "Identificando los conceptos clave...",
+    "Consultando tus archivos de estudio...",
+    "Procesando el material de la carpeta...",
+    "Construyendo preguntas desafiantes...",
+    "Seleccionando los temas más importantes...",
+    "Revisando tus resoluciones previas...",
+    "Generando opciones de respuesta...",
+    "Preparando las flashcards...",
+    "Casi listo...",
+  ],
+};
+
+// onDone: callback que el padre llama cuando la request terminó
+function LoadingBar({ phrases, icon = "🧠", accentColor = "rgba(124,92,255,0.9)", done = false }) {
+  const [phraseIdx, setPhraseIdx] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const [progress, setProgress] = useState(8);
+  const intervalRef = useRef(null);
+  const progressRef = useRef(null);
+
+  // Rotar frases
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setPhraseIdx((i) => (i + 1) % phrases.length);
+        setVisible(true);
+      }, 350);
+    }, 2200);
+    return () => clearInterval(intervalRef.current);
+  }, [phrases]);
+
+  // Avanzar barra: hasta 85% sola, llega al 100% cuando done=true
+  useEffect(() => {
+    if (done) {
+      setProgress(100);
+      return;
+    }
+    progressRef.current = setInterval(() => {
+      setProgress((p) => {
+        if (p >= 85) return p;
+        const step = p < 40 ? 3 : p < 65 ? 1.5 : 0.5;
+        return Math.min(p + step, 85);
+      });
+    }, 180);
+    return () => clearInterval(progressRef.current);
+  }, [done]);
+
+  return (
+    <div className="ai-loading-wrap">
+      <div className="ai-loading-icon">{icon}</div>
+      <div className="ai-loading-bar-row">
+        <div className="ai-loading-bar-bg">
+          <div
+            className="ai-loading-bar-fill"
+            style={{
+              width: `${progress}%`,
+              transition: done ? "width 400ms ease" : "width 180ms ease",
+              background: accentColor,
+            }}
+          />
+          <div className="ai-loading-bar-shimmer" />
+        </div>
+        <span className="ai-loading-bar-pct">{Math.round(progress)}%</span>
+      </div>
+      <p
+        className="ai-loading-phrase"
+        style={{ opacity: visible ? 1 : 0, transition: "opacity 350ms ease" }}
+      >
+        {done ? "¡Listo!" : phrases[phraseIdx]}
+      </p>
+    </div>
   );
 }
 
@@ -36,8 +115,8 @@ export default function Flashcards() {
   const [answered, setAnswered] = useState(false);
   const [score, setScore] = useState(0);
   const [results, setResults] = useState([]);
+  const [loadingDone, setLoadingDone] = useState(false);
 
-  // Plan limit
   const [showLimit, setShowLimit] = useState(false);
   const [userPlan, setUserPlan] = useState("free");
 
@@ -59,6 +138,7 @@ export default function Flashcards() {
 
   async function generateFlashcards() {
     setPhase("loading");
+    setLoadingDone(false);
     try {
       const token = getToken() || "";
       const res = await fetch(`${API_BASE}/folder/${folderId}/flashcards`, {
@@ -69,11 +149,11 @@ export default function Flashcards() {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         if (
-  res.status === 403 ||
-  res.status === 429 ||
-  errData.error === "EXERCISES_LIMIT_REACHED" ||
-  errData.error === "LIMIT_REACHED"
-) {
+          res.status === 403 ||
+          res.status === 429 ||
+          errData.error === "EXERCISES_LIMIT_REACHED" ||
+          errData.error === "LIMIT_REACHED"
+        ) {
           setShowLimit(true);
           setPhase("idle");
           return;
@@ -82,13 +162,17 @@ export default function Flashcards() {
       }
 
       const data = await res.json();
-      setFlashcards(data.flashcards);
-      setCurrent(0);
-      setScore(0);
-      setResults([]);
-      setSelected(null);
-      setAnswered(false);
-      setPhase("playing");
+      // Marcar done para que la barra llegue al 100%, luego transicionar
+      setLoadingDone(true);
+      setTimeout(() => {
+        setFlashcards(data.flashcards);
+        setCurrent(0);
+        setScore(0);
+        setResults([]);
+        setSelected(null);
+        setAnswered(false);
+        setPhase("playing");
+      }, 500);
     } catch (err) {
       console.error(err);
       setPhase("idle");
@@ -147,6 +231,7 @@ export default function Flashcards() {
     setResults([]);
     setSelected(null);
     setAnswered(false);
+    setLoadingDone(false);
   }
 
   const card = flashcards[current];
@@ -156,13 +241,7 @@ export default function Flashcards() {
   if (phase === "idle") {
     return (
       <div className="fc-shell">
-        {showLimit && (
-          <PlanLimitModal
-            type="flashcards"
-            plan={userPlan}
-            onClose={() => setShowLimit(false)}
-          />
-        )}
+        {showLimit && <PlanLimitModal type="flashcards" plan={userPlan} onClose={() => setShowLimit(false)} />}
         <div className="fc-bg-orb fc-bg-orb--1" />
         <div className="fc-bg-orb fc-bg-orb--2" />
         <button className="fc-back" onClick={() => navigate(-1)}>← Volver a la carpeta</button>
@@ -173,9 +252,7 @@ export default function Flashcards() {
             Generá 5 preguntas basadas en los temas que estudiaste en esta carpeta.
             Poné a prueba lo que aprendiste.
           </p>
-          <button className="fc-start-btn" onClick={generateFlashcards}>
-            Generar preguntas
-          </button>
+          <button className="fc-start-btn" onClick={generateFlashcards}>Generar preguntas</button>
         </div>
       </div>
     );
@@ -188,9 +265,12 @@ export default function Flashcards() {
         <div className="fc-bg-orb fc-bg-orb--1" />
         <div className="fc-bg-orb fc-bg-orb--2" />
         <div className="fc-loading">
-          <div className="fc-spinner" />
-          <p className="fc-loading-text">Generando preguntas...</p>
-          <p className="fc-loading-sub">Analizando tus chats</p>
+          <LoadingBar
+            phrases={PHRASES.generating}
+            icon="🧠"
+            accentColor="rgba(124,92,255,0.9)"
+            done={loadingDone}
+          />
         </div>
       </div>
     );
@@ -209,19 +289,14 @@ export default function Flashcards() {
           <div className={`fc-done-emoji ${isGreat ? "fc-done-emoji--great" : isOk ? "fc-done-emoji--ok" : "fc-done-emoji--bad"}`}>
             {isGreat ? "🏆" : isOk ? "👍" : "💪"}
           </div>
-          <h2 className="fc-done-title">
-            {isGreat ? "¡Excelente!" : isOk ? "¡Bien!" : "¡Seguí practicando!"}
-          </h2>
+          <h2 className="fc-done-title">{isGreat ? "¡Excelente!" : isOk ? "¡Bien!" : "¡Seguí practicando!"}</h2>
           <div className="fc-done-score">
             <span className="fc-done-num">{score}</span>
             <span className="fc-done-sep">/</span>
             <span className="fc-done-total">{flashcards.length}</span>
           </div>
           <div className="fc-done-bar-wrap">
-            <div
-              className={`fc-done-bar ${isGreat ? "fc-done-bar--great" : isOk ? "fc-done-bar--ok" : "fc-done-bar--bad"}`}
-              style={{ width: `${pct}%` }}
-            />
+            <div className={`fc-done-bar ${isGreat ? "fc-done-bar--great" : isOk ? "fc-done-bar--ok" : "fc-done-bar--bad"}`} style={{ width: `${pct}%` }} />
           </div>
           <p className="fc-done-pct">{pct}% correcto</p>
           <div className="fc-done-results">
@@ -244,13 +319,7 @@ export default function Flashcards() {
   /* ── PLAYING ── */
   return (
     <div className="fc-shell">
-      {showLimit && (
-        <PlanLimitModal
-          type="flashcards"
-          plan={userPlan}
-          onClose={() => setShowLimit(false)}
-        />
-      )}
+      {showLimit && <PlanLimitModal type="flashcards" plan={userPlan} onClose={() => setShowLimit(false)} />}
       <div className="fc-bg-orb fc-bg-orb--1" />
       <div className="fc-bg-orb fc-bg-orb--2" />
       <div className="fc-header">
