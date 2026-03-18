@@ -14,13 +14,12 @@ import MathKeyboard from "./MathKeyboard";
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
 const MAX_CHARS = 2000;
+const FREE_FOLDERS_LIMIT = 3;
 
-// ── Model Selector ──────────────────────────────────────────────────────────
 function ModelSelector({ models, selectedKey, onChange }) {
   const [open, setOpen] = useState(false);
   const selected = models.find((m) => m.key === selectedKey) || models.find((m) => m.available) || models[0];
   if (!selected || models.length <= 1) return null;
-
   return (
     <div data-tour="model-selector" className="model-selector">
       <button className="model-selector__trigger" onClick={() => setOpen((v) => !v)} title="Cambiar modelo">
@@ -31,8 +30,7 @@ function ModelSelector({ models, selectedKey, onChange }) {
       {open && (
         <div className="model-selector__dropdown">
           {models.map((m) => (
-            <button
-              key={m.key}
+            <button key={m.key}
               className={`model-selector__option ${m.key === selectedKey ? "active" : ""} ${!m.available ? "locked" : ""}`}
               onClick={() => { if (!m.available) return; onChange(m.key); setOpen(false); }}
               disabled={!m.available}
@@ -41,20 +39,14 @@ function ModelSelector({ models, selectedKey, onChange }) {
               <div className="model-selector__option-left">
                 <span className="model-selector__option-name">
                   {!m.available && <span className="model-selector__lock-icon">🔒</span>}
-                  <span style={{ textDecoration: m.available ? "none" : "line-through", opacity: m.available ? 1 : 0.5 }}>
-                    {m.displayName}
-                  </span>
+                  <span style={{ textDecoration: m.available ? "none" : "line-through", opacity: m.available ? 1 : 0.5 }}>{m.displayName}</span>
                 </span>
                 <span className="model-selector__option-desc" style={{ opacity: m.available ? 1 : 0.4 }}>
                   {m.available ? m.description : "Requiere un plan superior"}
                 </span>
               </div>
               <div className="model-selector__option-right">
-                {m.cost > 1 && (
-                  <span className="model-selector__option-cost" style={{ opacity: m.available ? 1 : 0.4 }}>
-                    ×{m.cost} msgs
-                  </span>
-                )}
+                {m.cost > 1 && <span className="model-selector__option-cost" style={{ opacity: m.available ? 1 : 0.4 }}>×{m.cost} msgs</span>}
                 {!m.available && <span className="model-selector__upgrade-badge">⚡ Subir plan</span>}
               </div>
             </button>
@@ -65,11 +57,9 @@ function ModelSelector({ models, selectedKey, onChange }) {
   );
 }
 
-// ── Smart Folder Nudge ──────────────────────────────────────────────────────
 function FolderNudge({ suggestion, folders, onAssignExisting, onCreateNew, onDismiss }) {
   const [busy, setBusy] = useState(false);
   const matchedFolder = suggestion.isExisting ? folders.find((f) => f.name === suggestion.folderName) : null;
-
   if (suggestion.isExisting && matchedFolder) {
     return (
       <div className="folder-nudge folder-nudge--assign">
@@ -88,7 +78,6 @@ function FolderNudge({ suggestion, folders, onAssignExisting, onCreateNew, onDis
       </div>
     );
   }
-
   return (
     <div className="folder-nudge folder-nudge--create">
       <div className="folder-nudge__icon">📁</div>
@@ -107,7 +96,6 @@ function FolderNudge({ suggestion, folders, onAssignExisting, onCreateNew, onDis
   );
 }
 
-// ── Main Component ──────────────────────────────────────────────────────────
 export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -121,6 +109,9 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const [errorMsg, setErrorMsg] = useState("");
   const [showFolderPopup, setShowFolderPopup] = useState(false);
   const [folders, setFolders] = useState([]);
+  const [assignedFolderId, setAssignedFolderId] = useState(null);
+  const [chatFolderMap, setChatFolderMap] = useState({});
+  const [foldersLimit, setFoldersLimit] = useState(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const chatMessagesRef = useRef(null);
@@ -139,7 +130,14 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const isOverLimit = charCount >= MAX_CHARS;
   const isNearLimit = charCount >= MAX_CHARS * 0.9;
 
-  useEffect(() => { loadChats(); loadFolders(); loadModels(); loadUserPlan(); }, []);
+  // ── Calcular carpetas bloqueadas (misma lógica que StudyHub) ──
+  const lockedFolderIds = (() => {
+    if (foldersLimit === null) return new Set();
+    const sorted = [...folders].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    return new Set(sorted.slice(foldersLimit).map((f) => f.id));
+  })();
+
+  useEffect(() => { loadUserPlan(); loadChats(); loadFolders(); loadModels(); }, []);
 
   useEffect(() => {
     const chatId = searchParams.get("id");
@@ -182,7 +180,9 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       const res = await fetch(`${API_BASE}/auth/user/profile`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) return;
       const data = await res.json();
-      setUserPlan(data?.plan || "free");
+      const isVerified = data?.emailVerified ?? false;
+      setUserPlan(isVerified ? (data?.plan || "free") : "free");
+      setFoldersLimit(isVerified ? (data?.foldersLimit ?? null) : FREE_FOLDERS_LIMIT);
     } catch { /* silencioso */ }
   }
 
@@ -190,9 +190,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
     try {
       const token = getToken?.() || "";
       const email = getEmailFromToken();
-      const res = await fetch(`${API_URL}chats?email=${encodeURIComponent(email)}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await fetch(`${API_URL}chats?email=${encodeURIComponent(email)}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) throw new Error("Error al cargar chats");
       const data = await res.json();
       const sorted = Array.isArray(data)
@@ -209,21 +207,54 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       if (!res.ok) throw new Error();
       const data = await res.json();
       const processed = Array.isArray(data)
-        ? data.map((f) => {
-            const chatsArr = Object.values(f).find((v) => Array.isArray(v));
-            return { id: f.folderId || f.id, name: f.name, chatCount: chatsArr ? chatsArr.length : 0 };
-          })
+        ? data.map((f) => ({
+            id: f.folderId || f.id,
+            name: f.name,
+            chatCount: 0,
+            createdAt: f.createdAt,
+            color: f.color ?? null,
+          }))
         : [];
       setFolders(processed);
+      const folderChatsResults = await Promise.allSettled(
+        processed.map((f) =>
+          fetch(`${API_BASE}/folder/${f.id}/chats`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+            .then((r) => (r.ok ? r.json() : []))
+            .then((chats) => ({ folder: f, chats }))
+        )
+      );
+      const map = {};
+      const updatedCounts = {};
+      folderChatsResults.forEach((r) => {
+        if (r.status === "fulfilled") {
+          const { folder, chats } = r.value;
+          updatedCounts[folder.id] = Array.isArray(chats) ? chats.length : 0;
+          if (Array.isArray(chats)) {
+            chats.forEach((c) => {
+              const id = c.chatId || c.id;
+              if (id) map[id] = { name: folder.name, color: folder.color };
+            });
+          }
+        }
+      });
+      setFolders((prev) => prev.map((f) => ({ ...f, chatCount: updatedCounts[f.id] ?? f.chatCount })));
+      setChatFolderMap(map);
     } catch { setFolders([]); }
   }
 
   async function assignToFolder(folderId) {
     if (!currentChatId) return;
+    setAssignedFolderId(folderId);
     const token = getToken?.() || "";
     await fetch(`${API_BASE}/folder/${folderId}/chats/${currentChatId}`, {
       method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
+    setFolders((prev) => prev.map((f) => f.id === folderId ? { ...f, chatCount: f.chatCount + 1 } : f));
+    const folder = folders.find((f) => f.id === folderId);
+    if (folder && currentChatId) {
+      setChatFolderMap((prev) => ({ ...prev, [currentChatId]: { name: folder.name, color: folder.color } }));
+    }
+    setTimeout(() => setAssignedFolderId(null), 1200);
     setShowFolderPopup(false); setNudgeSuggestion(null); setNudgeDismissed(true);
   }
 
@@ -257,6 +288,11 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       });
       if (!res.ok) return;
       const suggestion = await res.json();
+      // No sugerir carpetas bloqueadas
+      if (suggestion.isExisting) {
+        const matched = folders.find((f) => f.name === suggestion.folderName);
+        if (matched && lockedFolderIds.has(matched.id)) return;
+      }
       setNudgeSuggestion(suggestion);
     } catch (e) { console.error("Error obteniendo sugerencia de carpeta:", e); }
   }
@@ -273,9 +309,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
         if (msg.role === "assistant" && typeof msg.content === "string") {
           const m = msg.content.match(/<GRAPH_JSON>\s*(\{[\s\S]*?\})\s*<\/GRAPH_JSON>/);
           if (m) {
-            try {
-              return { ...msg, content: msg.content.replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, "").trim(), plotSpec: JSON.parse(m[1]) };
-            } catch {}
+            try { return { ...msg, content: msg.content.replace(/<GRAPH_JSON>[\s\S]*?<\/GRAPH_JSON>/, "").trim(), plotSpec: JSON.parse(m[1]) }; } catch {}
           }
         }
         if (msg.role === "user" && msg.imageUrl) return { ...msg, imagePreview: msg.imageUrl };
@@ -320,22 +354,18 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       if (currentImage) formData.append("image", currentImage);
       if (currentChatId) formData.append("chatId", currentChatId);
       formData.append("modelKey", selectedModel);
-      const response = await fetch(API_URL, {
-        method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData,
-      });
+      const response = await fetch(API_URL, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData });
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         if (response.status === 429 || errData.error === "MESSAGES_LIMIT_REACHED") {
           setPlanLimitType("messages");
           setMessages((prev) => { const u = [...prev]; if (u[u.length-1]?.streaming) u.pop(); return u; });
-          setIsLoading(false);
-          return;
+          setIsLoading(false); return;
         }
         if (errData.error === "IMAGES_LIMIT_REACHED") {
           setPlanLimitType("images");
           setMessages((prev) => { const u = [...prev]; if (u[u.length-1]?.streaming) u.pop(); return u; });
-          setIsLoading(false);
-          return;
+          setIsLoading(false); return;
         }
         throw new Error(`Error ${response.status}`);
       }
@@ -355,32 +385,22 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
           try { event = JSON.parse(line); } catch { continue; }
           if (event.type === "delta") {
             accumulatedText += event.text;
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { ...updated[updated.length - 1], content: accumulatedText, streaming: true };
-              return updated;
-            });
+            setMessages((prev) => { const u = [...prev]; u[u.length-1] = { ...u[u.length-1], content: accumulatedText, streaming: true }; return u; });
           } else if (event.type === "done") {
-            setMessages((prev) => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { role: "assistant", content: accumulatedText, plotSpec: event.plotSpec || null, streaming: false };
-              return updated;
-            });
+            setMessages((prev) => { const u = [...prev]; u[u.length-1] = { role: "assistant", content: accumulatedText, plotSpec: event.plotSpec || null, streaming: false }; return u; });
             if (event.chat?.chatId && !currentChatId) {
               const newChatId = event.chat.chatId;
               setCurrentChatId(newChatId);
               navigate(`/chat?id=${newChatId}`, { replace: true });
               loadChats();
-              if (isFirst && !nudgeDismissed) {
-                setTimeout(() => { fetchFolderSuggestion(firstMessageRef.current); }, 600);
-              }
+              if (isFirst && !nudgeDismissed) setTimeout(() => { fetchFolderSuggestion(firstMessageRef.current); }, 600);
             }
           } else if (event.type === "error") { throw new Error(event.message); }
         }
       }
     } catch (err) {
       setErrorMsg(err?.message || "Error desconocido");
-      setMessages((prev) => { const updated = [...prev]; if (updated[updated.length - 1]?.streaming) updated.pop(); return updated; });
+      setMessages((prev) => { const u = [...prev]; if (u[u.length-1]?.streaming) u.pop(); return u; });
     } finally { setIsLoading(false); }
   }
 
@@ -395,38 +415,30 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   return (
     <div className="chat-view">
       <OnboardingTour autoStart={true} />
-      {planLimitType && (
-        <PlanLimitModal
-          type={planLimitType}
-          plan={userPlan}
-          onClose={() => setPlanLimitType(null)}
-        />
-      )}
+      {planLimitType && <PlanLimitModal type={planLimitType} plan={userPlan} onClose={() => setPlanLimitType(null)} />}
+      {sidebarOpen && window.innerWidth < 768 && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
-      {sidebarOpen && window.innerWidth < 768 && (
-        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
       <div className={`chat-sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="chat-sidebar-header">
           <button className="btn-new-chat" onClick={startNewChat}>+ Nuevo Chat</button>
         </div>
-
         <div className="chat-list">
           {chats.length === 0 && <p className="chat-list-empty">No hay chats aún</p>}
-          {chats.map((chat) => (
-            <div
-              key={chat.chatId}
-              className={`chat-item ${currentChatId === chat.chatId ? "active" : ""}`}
-              onClick={() => loadChat(chat.chatId)}
-            >
-              <div className="chat-item-title">{chat.title || "Sin título"}</div>
-              <div className="chat-item-date">{new Date(chat.createdAt).toLocaleDateString()}</div>
-            </div>
-          ))}
+          {chats.map((chat) => {
+            const folderInfo = chatFolderMap[chat.chatId];
+            return (
+              <div key={chat.chatId} className={`chat-item ${currentChatId === chat.chatId ? "active" : ""}`} onClick={() => loadChat(chat.chatId)}>
+                <div className="chat-item-title">{chat.title || "Sin título"}</div>
+                <div className="chat-item-meta">
+                  <span className="chat-item-folder" style={folderInfo?.color ? { color: folderInfo.color.replace("0.35", "0.9"), opacity: 1 } : {}}>
+                    {folderInfo ? `📁 ${folderInfo.name}` : "Sin carpeta"}
+                  </span>
+                  <span className="chat-item-date">{new Date(chat.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
-
         <div className="sidebar-upgrade" onClick={() => navigate("/plans")}>
           <div className="sidebar-upgrade-glow" />
           <div className="sidebar-upgrade-icon">⚡</div>
@@ -438,38 +450,24 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
         </div>
       </div>
 
-      {/* Main */}
       <div className={`chat-main ${messages.length === 0 ? "chat-main--empty" : ""}`}>
-
         {messages.length === 0 && (
           <div className="chat-empty-hero">
             <h2 className="chat-empty-hero__title">¿Cuál es el problema de hoy?</h2>
           </div>
         )}
-
         <div className={`chat-messages ${messages.length === 0 ? "chat-messages--hidden" : ""}`} ref={chatMessagesRef}>
           {messages.map((msg, idx) => {
             if (!msg || typeof msg !== "object") return null;
-            const content =
-              typeof msg.content === "string" ? msg.content
-              : typeof msg.content === "object" ? JSON.stringify(msg.content)
-              : String(msg.content || "");
-            const isLastUserMsg =
-              msg.role === "user" &&
-              idx === [...messages].map((m, i) => m.role === "user" ? i : -1).filter(i => i >= 0).at(-1);
+            const content = typeof msg.content === "string" ? msg.content : typeof msg.content === "object" ? JSON.stringify(msg.content) : String(msg.content || "");
+            const isLastUserMsg = msg.role === "user" && idx === [...messages].map((m, i) => m.role === "user" ? i : -1).filter(i => i >= 0).at(-1);
             return (
               <div key={idx} ref={isLastUserMsg ? lastUserMessageRef : null} className={`chat-message chat-message--${msg.role || "user"}`}>
-                {msg.role === "user" && msg.imagePreview && (
-                  <div className="message-image-preview"><img src={msg.imagePreview} alt="Imagen adjunta" /></div>
-                )}
+                {msg.role === "user" && msg.imagePreview && <div className="message-image-preview"><img src={msg.imagePreview} alt="Imagen adjunta" /></div>}
                 <div className="chat-message-content">
-                  {msg.role === "user" ? (
-                    <p>{content}</p>
-                  ) : (
+                  {msg.role === "user" ? <p>{content}</p> : (
                     <div className="assistant-message-body">
-                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
-                        {normalizeMath(content)}
-                      </ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>{normalizeMath(content)}</ReactMarkdown>
                     </div>
                   )}
                 </div>
@@ -480,7 +478,8 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
 
           {nudgeSuggestion && currentChatId && !nudgeDismissed && (
             <FolderNudge
-              suggestion={nudgeSuggestion} folders={folders}
+              suggestion={nudgeSuggestion}
+              folders={folders.filter((f) => !lockedFolderIds.has(f.id))}
               onAssignExisting={assignToFolder} onCreateNew={createFolderAndAssign}
               onDismiss={() => { setNudgeSuggestion(null); setNudgeDismissed(true); }}
             />
@@ -490,23 +489,19 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
             const streamingMsg = messages[messages.length - 1];
             const chars = (streamingMsg?.streaming && streamingMsg?.content?.length) || 0;
             const shrunk = Math.min(chars / 300 * 10, 60);
-            const spacerVh = Math.max(60 - shrunk, 0);
-            return <div style={{ minHeight: `${spacerVh}vh`, flexShrink: 0, transition: "min-height 0.3s ease" }} />;
+            return <div style={{ minHeight: `${Math.max(60 - shrunk, 0)}vh`, flexShrink: 0, transition: "min-height 0.3s ease" }} />;
           })()}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
         <div className={`chat-input-area ${messages.length === 0 ? "chat-input-area--centered" : ""}`}>
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
-
           {imagePreview && (
             <div className="input-image-preview">
               <img src={imagePreview} alt="Imagen a enviar" />
               <button className="input-image-preview__remove" onClick={handleRemoveImage}>✕</button>
             </div>
           )}
-
           <div className="chat-input-row">
             <div className="chat-input-box">
               <textarea
@@ -519,48 +514,24 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
                 disabled={isLoading}
                 maxLength={MAX_CHARS}
               />
-
-              {/* Toolbar */}
               <div className="chat-input-toolbar">
-                <button
-                  data-tour="attach"
-                  type="button"
-                  className="btn-toolbar"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isLoading}
-                  title="Adjuntar imagen"
-                >
+                <button data-tour="attach" type="button" className="btn-toolbar" onClick={() => fileInputRef.current?.click()} disabled={isLoading} title="Adjuntar imagen">
                   📎 <span>Adjuntar</span>
                 </button>
-
-                {/* ── Teclado matemático ── */}
-                <MathKeyboard
-                  onInsert={(sym) => setProblemText((prev) => (prev + sym).slice(0, MAX_CHARS))}
-                />
-
+                <MathKeyboard onInsert={(sym) => setProblemText((prev) => (prev + sym).slice(0, MAX_CHARS))} />
                 <div data-tour="model-selector">
                   <ModelSelector models={availableModels} selectedKey={selectedModel} onChange={setSelectedModel} />
                 </div>
-
-                <span className="char-counter-inline" style={{
-                  color: isOverLimit ? "#e53935" : isNearLimit ? "#e57373" : "rgba(255,255,255,0.22)",
-                  fontWeight: isNearLimit ? "600" : "normal",
-                }}>
+                <span className="char-counter-inline" style={{ color: isOverLimit ? "#e53935" : isNearLimit ? "#e57373" : "rgba(255,255,255,0.22)", fontWeight: isNearLimit ? "600" : "normal" }}>
                   {charCount}/{MAX_CHARS}
                 </span>
               </div>
             </div>
 
-            {/* Botones fuera del cuadro */}
             <div className="chat-input-side">
               {currentChatId && messages.length > 0 && (
                 <div className="folder-popup-inline">
-                  <button
-                    type="button"
-                    className="btn-side-icon"
-                    onClick={() => setShowFolderPopup((v) => !v)}
-                    title="Agregar a carpeta"
-                  >
+                  <button type="button" className="btn-side-icon" onClick={() => setShowFolderPopup((v) => !v)} title="Agregar a carpeta">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
@@ -573,39 +544,40 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
                       </div>
                       <div className="folder-popup-list">
                         {folders.length === 0 && <p className="folder-popup-empty">No hay carpetas aún.</p>}
-                        {folders.map((folder) => (
-                          <div key={folder.id} className="folder-popup-item" onClick={() => assignToFolder(folder.id)}>
-                            <span className="folder-popup-icon">📁</span>
-                            <span className="folder-popup-name">{folder.name}</span>
-                            <span className="folder-popup-count">{folder.chatCount}</span>
-                          </div>
-                        ))}
+                        {folders.map((folder) => {
+                          const isSaved = assignedFolderId === folder.id;
+                          const isLocked = lockedFolderIds.has(folder.id);
+                          return (
+                            <div
+                              key={folder.id}
+                              className={`folder-popup-item ${isSaved ? "folder-popup-item--saved" : ""} ${isLocked ? "folder-popup-item--locked" : ""}`}
+                              style={folder.color && !isLocked ? { borderLeft: `3px solid ${folder.color.replace("0.35", "0.9")}` } : {}}
+                              onClick={() => { if (!isSaved && !isLocked) assignToFolder(folder.id); }}
+                            >
+                              <span className="folder-popup-icon">{isLocked ? "🔒" : "📁"}</span>
+                              <span className="folder-popup-name" style={isLocked ? { opacity: 0.45 } : {}}>{folder.name}</span>
+                              {isSaved && <span className="folder-popup-saved">✓ Guardado</span>}
+                              {!isSaved && isLocked && <span className="folder-popup-locked-label">Plan superior</span>}
+                              {!isSaved && !isLocked && <span className="folder-popup-count">{folder.chatCount}</span>}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
                 </div>
               )}
-
-              <button
-                onClick={handleSolve}
-                disabled={isLoading || !problemText.trim() || isOverLimit}
-                className="btn-send-icon"
-                title="Enviar"
-              >
+              <button onClick={handleSolve} disabled={isLoading || !problemText.trim() || isOverLimit} className="btn-send-icon" title="Enviar">
                 {isLoading
                   ? <span className="btn-send-icon__spinner" />
                   : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="22" y1="2" x2="11" y2="13"/>
-                      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
                     </svg>
                 }
               </button>
             </div>
-
           </div>
-
-          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
-            onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
         </div>
       </div>
     </div>
@@ -621,14 +593,11 @@ function MessagePlot({ plotSpec }) {
     <div className={`message-plot-wrapper ${minimized ? "minimized" : "expanded"}`}>
       <div className="message-plot-header">
         <span className="message-plot-title">📊 Gráfico</span>
-        <button className="message-plot-toggle" onClick={() => setMinimized((v) => !v)}>
-          {minimized ? "⤢ Expandir" : "⤡ Minimizar"}
-        </button>
+        <button className="message-plot-toggle" onClick={() => setMinimized((v) => !v)}>{minimized ? "⤢ Expandir" : "⤡ Minimizar"}</button>
       </div>
       {!minimized && (
         <div className="message-plot-body">
-          <Plot
-            data={plotResult.model.data}
+          <Plot data={plotResult.model.data}
             layout={{ ...plotResult.model.layout, autosize: true, paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(18,18,26,0.6)", font: { color: "#e0e0e0" } }}
             useResizeHandler style={{ width: "100%", height: "420px" }}
             config={{ responsive: true, displayModeBar: true }}

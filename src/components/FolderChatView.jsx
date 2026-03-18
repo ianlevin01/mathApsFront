@@ -143,15 +143,34 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
   }
 
   async function loadFolderInfo() {
-    try {
-      const token = getToken?.() || "";
-      const res = await fetch(`${API_BASE}/folder`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      const folder = Array.isArray(data) ? data.find((f) => (f.folderId || f.id) === folderId) : null;
-      if (folder) setFolderName(folder.name || "Carpeta");
-    } catch (err) { console.error(err); }
-  }
+  try {
+    const token = getToken?.() || "";
+    const profileRes = await fetch(`${API_BASE}/auth/user/profile`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (profileRes.ok) {
+      const profile = await profileRes.json();
+      const isVerified = profile?.emailVerified ?? false;
+      const limit = isVerified ? (profile?.foldersLimit ?? null) : 3;
+      if (limit !== null) {
+        const foldersRes = await fetch(`${API_BASE}/folder`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+        if (foldersRes.ok) {
+          const allFolders = await foldersRes.json();
+          const sorted = [...allFolders].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          const lockedIds = new Set(sorted.slice(limit).map((f) => f.folderId || f.id));
+          if (lockedIds.has(folderId)) { navigate("/study"); return; }
+          const folder = allFolders.find((f) => (f.folderId || f.id) === folderId);
+          if (folder) setFolderName(folder.name || "Carpeta");
+          return;
+        }
+      }
+    }
+    // fallback sin límite
+    const res = await fetch(`${API_BASE}/folder`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const folder = Array.isArray(data) ? data.find((f) => (f.folderId || f.id) === folderId) : null;
+    if (folder) setFolderName(folder.name || "Carpeta");
+  } catch (err) { console.error(err); }
+}
 
   async function loadFolderChats() {
     try {

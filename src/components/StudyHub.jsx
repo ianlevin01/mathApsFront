@@ -1070,7 +1070,7 @@ export default function StudyHub() {
           onAssign={(folderId) => assignChatToFolder(quickAssignChat, folderId)} onClose={() => setQuickAssignChat(null)} />
       )}
       {pickFolderMode && (
-        <PickFolderModal mode={pickFolderMode} folders={foldersWithCounts}
+        <PickFolderModal mode={pickFolderMode} folders={foldersWithCounts.filter((f) => !lockedFolderIds.has(f.id))}
           onPick={(folderId) => { trackStudyAction(pickFolderMode === "flashcards" ? "flashcards" : "dev_questions"); navigate(`/folder/${folderId}/${pickFolderMode}`); setPickFolderMode(null); }}
           onClose={() => setPickFolderMode(null)} />
       )}
@@ -1079,7 +1079,7 @@ export default function StudyHub() {
           onClose={() => setUploadModalFolder(null)}
           onUploaded={(fileId) => { handleFileUploaded(uploadModalFolder.id); setUploadModalFolder(null); }} />
       )}
-      {showDailyExam && <DailyExamModal folders={foldersWithCounts} onClose={() => setShowDailyExam(false)} onCompleted={handleExamCompleted} />}
+      {showDailyExam && <DailyExamModal folders={foldersWithCounts.filter((f) => !lockedFolderIds.has(f.id))} onClose={() => setShowDailyExam(false)} onCompleted={handleExamCompleted} />}
 
       <div className="study-header">
         <button className="btn-back" onClick={() => navigate("/chat")}>← Chat</button>

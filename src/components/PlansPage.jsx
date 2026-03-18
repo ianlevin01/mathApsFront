@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken } from "../auth";
 import "../styles/plans.css";
@@ -72,6 +73,23 @@ const PLANS = [
 
 export default function PlansPage() {
   const navigate = useNavigate();
+  const [hadTrial, setHadTrial] = useState(false);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const token = getToken();
+        if (!token) return;
+        const res = await fetch(`${API_BASE}/auth/user/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setHadTrial(data?.hadTrial ?? false);
+      } catch {}
+    }
+    fetchProfile();
+  }, []);
 
   async function handleCheckout(planId) {
     if (planId === "free") return;
@@ -161,7 +179,7 @@ export default function PlansPage() {
             {/* Badges superiores */}
             <div className="plans-page-badges">
               {p.badge && <div className="plans-page-badge">{p.badge}</div>}
-              {p.trialBadge && (
+              {p.trialBadge && !hadTrial && (
                 <div className="plans-page-trial-badge">🎁 {p.trialBadge}</div>
               )}
             </div>
@@ -192,13 +210,13 @@ export default function PlansPage() {
                 onClick={() => handleCheckout(p.id)}
                 disabled={p.id === "free"}
               >
-                {p.buttonText}
+                {p.id === "plus" && !hadTrial ? "Empezar prueba gratis" : p.buttonText}
               </button>
               <p className="plans-page-footnote">
                 {p.id === "free"
                   ? "Sin tarjeta • Acceso inmediato"
                   : p.id === "plus"
-                  ? "3 días gratis • Sin tarjeta requerida"
+                  ? hadTrial ? "Cancelás cuando quieras" : "3 días gratis • Sin tarjeta requerida"
                   : "Cancelás cuando quieras"}
               </p>
             </div>

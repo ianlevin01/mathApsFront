@@ -1029,3 +1029,17 @@
     max-height: calc(100vh - 220px);
   }
 }
+.folder-popup-item--locked {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.folder-popup-item--locked:hover {
+  transform: none;
+  background: transparent;
+  border-color: transparent;
+}
+.folder-popup-locked-label {
+  font-size: 11px;
+  color: rgba(255, 140, 0, 0.8);
+  white-space: nowrap;
+}
