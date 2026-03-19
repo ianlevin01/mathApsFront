@@ -385,7 +385,8 @@ function LandingPage({ onLogin }) {
           </h1>
           <p className="lp-hero__subtitle">
             MathAPS analiza tu ejercicio, lo resuelve con explicaciones claras
-            y te ayuda a entender el razonamiento. Para secundaria, CBC, UTN y facultad.
+            y te ayuda a entender el razonamiento. Te ayuda a organizar los contenidos
+            y mantener una constancia y progreso sobre los contenidos.
           </p>
           <div className="lp-hero__actions">
             <button className="lp-btn lp-btn--primary lp-btn--lg" onClick={onLogin}>
