@@ -4,6 +4,10 @@ import { GoogleLogin } from "@react-oauth/google";
 
 const AUTH_BASE = "https://api.mathaps.online";
 
+function trackLoginAction(method) {
+  if (window.fbq) window.fbq("trackCustom", "login", { method });
+}
+
 export default function Auth({ onSuccess }) {
   const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
   const [email, setEmail] = useState("");
@@ -27,6 +31,7 @@ export default function Auth({ onSuccess }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `Error ${res.status}`);
 
+      trackLoginAction("google");
       setToken(data.token);
       onSuccess?.();
     } catch (err) {
@@ -78,6 +83,7 @@ export default function Auth({ onSuccess }) {
         throw new Error("No llegó token del backend (login). Revisá console.log.");
       }
 
+      trackLoginAction("email");
       setToken(token);
       onSuccess?.();
     } catch (err) {
