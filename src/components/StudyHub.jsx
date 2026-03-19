@@ -7,7 +7,7 @@ import rehypeKatex from "rehype-katex";
 import PlanLimitModal from "./PlanLimitModal";
 import "katex/dist/katex.min.css";
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://api.mathaps.online";
 
 const FOLDER_SUGGESTIONS = [
   "Cálculo diferencial","Cálculo integral","Álgebra lineal","Estadística",

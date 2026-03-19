@@ -10,7 +10,7 @@ import "katex/dist/katex.min.css";
 import "../styles/devquestions.css";
 import "../styles/ai_loading_1.css";
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://api.mathaps.online";
 
 function cleanLatex(text) {
   if (!text) return "";

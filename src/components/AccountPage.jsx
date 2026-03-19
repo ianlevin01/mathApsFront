@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { getToken, getEmailFromToken, removeToken } from "../auth";
 import "../styles/account.css";
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = "https://api.mathaps.online";
 
 const PLAN_META = {
   free: { label: "Free", color: "#8888aa", badge: "GRATIS", icon: "🔓" },
