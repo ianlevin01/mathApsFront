@@ -116,6 +116,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const messagesEndRef = useRef(null);
   const chatMessagesRef = useRef(null);
   const lastUserMessageRef = useRef(null);
+  const textareaRef = useRef(null);
   const [sendCount, setSendCount] = useState(0);
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("mth-mini");
@@ -130,7 +131,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   const isOverLimit = charCount >= MAX_CHARS;
   const isNearLimit = charCount >= MAX_CHARS * 0.9;
 
-  // ── Calcular carpetas bloqueadas (misma lógica que StudyHub) ──
   const lockedFolderIds = (() => {
     if (foldersLimit === null) return new Set();
     const sorted = [...folders].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
@@ -207,13 +207,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       if (!res.ok) throw new Error();
       const data = await res.json();
       const processed = Array.isArray(data)
-        ? data.map((f) => ({
-            id: f.folderId || f.id,
-            name: f.name,
-            chatCount: 0,
-            createdAt: f.createdAt,
-            color: f.color ?? null,
-          }))
+        ? data.map((f) => ({ id: f.folderId || f.id, name: f.name, chatCount: 0, createdAt: f.createdAt, color: f.color ?? null }))
         : [];
       setFolders(processed);
       const folderChatsResults = await Promise.allSettled(
@@ -288,7 +282,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       });
       if (!res.ok) return;
       const suggestion = await res.json();
-      // No sugerir carpetas bloqueadas
       if (suggestion.isExisting) {
         const matched = folders.find((f) => f.name === suggestion.folderName);
         if (matched && lockedFolderIds.has(matched.id)) return;
@@ -355,20 +348,34 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       if (currentChatId) formData.append("chatId", currentChatId);
       formData.append("modelKey", selectedModel);
       const response = await fetch(API_URL, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : {}, body: formData });
+
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        if (response.status === 429 || errData.error === "MESSAGES_LIMIT_REACHED") {
+
+        // ── Límite de mensajes: 403 o 429 ──
+        if (
+          response.status === 429 ||
+          response.status === 403 ||
+          errData.error === "MESSAGES_LIMIT_REACHED" ||
+          errData.error === "LIMIT_REACHED"
+        ) {
           setPlanLimitType("messages");
-          setMessages((prev) => { const u = [...prev]; if (u[u.length-1]?.streaming) u.pop(); return u; });
-          setIsLoading(false); return;
+          setMessages((prev) => { const u = [...prev]; if (u[u.length - 1]?.streaming) u.pop(); return u; });
+          setIsLoading(false);
+          return;
         }
-        if (errData.error === "IMAGES_LIMIT_REACHED") {
+
+        // ── Límite de imágenes ──
+        if (errData.error === "IMAGES_LIMIT_REACHED" || (response.status === 500 && currentImage)) {
           setPlanLimitType("images");
-          setMessages((prev) => { const u = [...prev]; if (u[u.length-1]?.streaming) u.pop(); return u; });
-          setIsLoading(false); return;
+          setMessages((prev) => { const u = [...prev]; if (u[u.length - 1]?.streaming) u.pop(); return u; });
+          setIsLoading(false);
+          return;
         }
+
         throw new Error(`Error ${response.status}`);
       }
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = ""; let accumulatedText = "";
@@ -385,9 +392,9 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
           try { event = JSON.parse(line); } catch { continue; }
           if (event.type === "delta") {
             accumulatedText += event.text;
-            setMessages((prev) => { const u = [...prev]; u[u.length-1] = { ...u[u.length-1], content: accumulatedText, streaming: true }; return u; });
+            setMessages((prev) => { const u = [...prev]; u[u.length - 1] = { ...u[u.length - 1], content: accumulatedText, streaming: true }; return u; });
           } else if (event.type === "done") {
-            setMessages((prev) => { const u = [...prev]; u[u.length-1] = { role: "assistant", content: accumulatedText, plotSpec: event.plotSpec || null, streaming: false }; return u; });
+            setMessages((prev) => { const u = [...prev]; u[u.length - 1] = { role: "assistant", content: accumulatedText, plotSpec: event.plotSpec || null, streaming: false }; return u; });
             if (event.chat?.chatId && !currentChatId) {
               const newChatId = event.chat.chatId;
               setCurrentChatId(newChatId);
@@ -400,7 +407,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
       }
     } catch (err) {
       setErrorMsg(err?.message || "Error desconocido");
-      setMessages((prev) => { const u = [...prev]; if (u[u.length-1]?.streaming) u.pop(); return u; });
+      setMessages((prev) => { const u = [...prev]; if (u[u.length - 1]?.streaming) u.pop(); return u; });
     } finally { setIsLoading(false); }
   }
 
@@ -415,7 +422,9 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
   return (
     <div className="chat-view">
       <OnboardingTour autoStart={true} />
-      {planLimitType && <PlanLimitModal type={planLimitType} plan={userPlan} onClose={() => setPlanLimitType(null)} />}
+      {planLimitType && (
+        <PlanLimitModal type={planLimitType} plan={userPlan} onClose={() => setPlanLimitType(null)} />
+      )}
       {sidebarOpen && window.innerWidth < 768 && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
 
       <div className={`chat-sidebar ${sidebarOpen ? "open" : "closed"}`}>
@@ -505,6 +514,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
           <div className="chat-input-row">
             <div className="chat-input-box">
               <textarea
+                ref={textareaRef}
                 value={problemText}
                 onChange={(e) => setProblemText(e.target.value.slice(0, MAX_CHARS))}
                 onPaste={handlePaste}
@@ -518,7 +528,10 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
                 <button data-tour="attach" type="button" className="btn-toolbar" onClick={() => fileInputRef.current?.click()} disabled={isLoading} title="Adjuntar imagen">
                   📎 <span>Adjuntar</span>
                 </button>
-                <MathKeyboard onInsert={(sym) => setProblemText((prev) => (prev + sym).slice(0, MAX_CHARS))} />
+                <MathKeyboard
+                  textareaRef={textareaRef}
+                  onInsert={(sym) => setProblemText((prev) => (prev + sym).slice(0, MAX_CHARS))}
+                />
                 <div data-tour="model-selector">
                   <ModelSelector models={availableModels} selectedKey={selectedModel} onChange={setSelectedModel} />
                 </div>
