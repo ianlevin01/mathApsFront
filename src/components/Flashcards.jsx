@@ -102,7 +102,7 @@ function LoadingBar({ phrases, icon = "🧠", accentColor = "rgba(124,92,255,0.9
   );
 }
 
-const API_BASE = "https://api.mathaps.online";
+const API_BASE = "http://localhost:3000";
 
 export default function Flashcards() {
   const { folderId } = useParams();

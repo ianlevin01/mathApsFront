@@ -10,8 +10,8 @@ import { interpretPlot } from "../utils/plotInterpreter";
 import PlanLimitModal from "./PlanLimitModal";
 import MathKeyboard from "./MathKeyboard";
 
-const API_URL = "https://api.mathaps.online/math/";
-const API_BASE = "https://api.mathaps.online";
+const API_URL = "http://localhost:3000/math/";
+const API_BASE = "http://localhost:3000";
 const MAX_CHARS = 2000;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -245,7 +245,7 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
       const token = getToken?.() || "";
       const formData = new FormData();
       formData.append("problem", currentProblem);
-      if (currentImage) formData.append("image", currentImage);
+      if (currentImage) formData.append("images", currentImage);
       if (currentChatId) formData.append("chatId", currentChatId);
       formData.append("modelKey", selectedModel);
       const response = await fetch(API_URL, {
