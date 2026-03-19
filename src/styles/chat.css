@@ -1043,3 +1043,46 @@
   color: rgba(255, 140, 0, 0.8);
   white-space: nowrap;
 }
+/* ── Chat item con botón de eliminar (FolderChatView) ── */
+
+.chat-item--removable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 6px; /* menos padding derecho para que entre el botón */
+}
+
+.chat-item-body {
+  flex: 1;
+  min-width: 0; /* para que el texto haga ellipsis */
+}
+
+.chat-item-remove {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 11px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+/* Mostrar al hacer hover sobre el chat-item */
+.chat-item--removable:hover .chat-item-remove {
+  opacity: 1;
+}
+
+.chat-item-remove:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+.chat-item-remove:active {
+  transform: scale(0.9);
+}

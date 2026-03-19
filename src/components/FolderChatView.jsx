@@ -13,13 +13,12 @@ import MathKeyboard from "./MathKeyboard";
 const API_URL = "https://api.mathaps.online/math/";
 const API_BASE = "https://api.mathaps.online";
 const MAX_CHARS = 2000;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-// ── Model Selector ──────────────────────────────────────────────────────────
 function ModelSelector({ models, selectedKey, onChange }) {
   const [open, setOpen] = useState(false);
   const selected = models.find((m) => m.key === selectedKey) || models.find((m) => m.available) || models[0];
   if (!selected || models.length <= 1) return null;
-
   return (
     <div data-tour="model-selector" className="model-selector">
       <button className="model-selector__trigger" onClick={() => setOpen((v) => !v)} title="Cambiar modelo">
@@ -49,11 +48,7 @@ function ModelSelector({ models, selectedKey, onChange }) {
                 </span>
               </div>
               <div className="model-selector__option-right">
-                {m.cost > 1 && (
-                  <span className="model-selector__option-cost" style={{ opacity: m.available ? 1 : 0.4 }}>
-                    ×{m.cost} msgs
-                  </span>
-                )}
+                {m.cost > 1 && <span className="model-selector__option-cost" style={{ opacity: m.available ? 1 : 0.4 }}>×{m.cost} msgs</span>}
                 {!m.available && <span className="model-selector__upgrade-badge">⚡ Subir plan</span>}
               </div>
             </button>
@@ -64,7 +59,6 @@ function ModelSelector({ models, selectedKey, onChange }) {
   );
 }
 
-// ── Main Component ──────────────────────────────────────────────────────────
 export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
   const navigate = useNavigate();
   const { folderId } = useParams();
@@ -78,15 +72,14 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
   const [imagePreview, setImagePreview] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [showFolderPopup, setShowFolderPopup] = useState(false);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const chatMessagesRef = useRef(null);
   const lastUserMessageRef = useRef(null);
+  const textareaRef = useRef(null);
   const [sendCount, setSendCount] = useState(0);
   const [availableModels, setAvailableModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState("mth-mini");
-
   const [planLimitType, setPlanLimitType] = useState(null);
   const [userPlan, setUserPlan] = useState("free");
 
@@ -120,9 +113,7 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
   async function loadUserPlan() {
     try {
       const token = getToken?.() || "";
-      const res = await fetch(`${API_BASE}/auth/user/profile`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await fetch(`${API_BASE}/auth/user/profile`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) return;
       const data = await res.json();
       setUserPlan(data?.plan || "free");
@@ -143,34 +134,33 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
   }
 
   async function loadFolderInfo() {
-  try {
-    const token = getToken?.() || "";
-    const profileRes = await fetch(`${API_BASE}/auth/user/profile`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (profileRes.ok) {
-      const profile = await profileRes.json();
-      const isVerified = profile?.emailVerified ?? false;
-      const limit = isVerified ? (profile?.foldersLimit ?? null) : 3;
-      if (limit !== null) {
-        const foldersRes = await fetch(`${API_BASE}/folder`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-        if (foldersRes.ok) {
-          const allFolders = await foldersRes.json();
-          const sorted = [...allFolders].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-          const lockedIds = new Set(sorted.slice(limit).map((f) => f.folderId || f.id));
-          if (lockedIds.has(folderId)) { navigate("/study"); return; }
-          const folder = allFolders.find((f) => (f.folderId || f.id) === folderId);
-          if (folder) setFolderName(folder.name || "Carpeta");
-          return;
+    try {
+      const token = getToken?.() || "";
+      const profileRes = await fetch(`${API_BASE}/auth/user/profile`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (profileRes.ok) {
+        const profile = await profileRes.json();
+        const isVerified = profile?.emailVerified ?? false;
+        const limit = isVerified ? (profile?.foldersLimit ?? null) : 3;
+        if (limit !== null) {
+          const foldersRes = await fetch(`${API_BASE}/folder`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+          if (foldersRes.ok) {
+            const allFolders = await foldersRes.json();
+            const sorted = [...allFolders].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            const lockedIds = new Set(sorted.slice(limit).map((f) => f.folderId || f.id));
+            if (lockedIds.has(folderId)) { navigate("/study"); return; }
+            const folder = allFolders.find((f) => (f.folderId || f.id) === folderId);
+            if (folder) setFolderName(folder.name || "Carpeta");
+            return;
+          }
         }
       }
-    }
-    // fallback sin límite
-    const res = await fetch(`${API_BASE}/folder`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (!res.ok) throw new Error();
-    const data = await res.json();
-    const folder = Array.isArray(data) ? data.find((f) => (f.folderId || f.id) === folderId) : null;
-    if (folder) setFolderName(folder.name || "Carpeta");
-  } catch (err) { console.error(err); }
-}
+      const res = await fetch(`${API_BASE}/folder`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const folder = Array.isArray(data) ? data.find((f) => (f.folderId || f.id) === folderId) : null;
+      if (folder) setFolderName(folder.name || "Carpeta");
+    } catch (err) { console.error(err); }
+  }
 
   async function loadFolderChats() {
     try {
@@ -209,12 +199,26 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
     } catch (err) { console.error(err); }
   }
 
+  // ── Validación de imagen ────────────────────────────────────────────────
+  function validateAndSetImage(file) {
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      setErrorMsg("La imagen es demasiado pesada. El límite es 10 MB.");
+      return;
+    }
+    setErrorMsg("");
+    setImageFile(file);
+  }
+
   function handlePaste(e) {
     const items = e.clipboardData?.items;
     if (!items) return;
     let found = false;
     for (const item of items) {
-      if (item.type.startsWith("image/")) { const file = item.getAsFile(); if (file) { found = true; setImageFile(file); } }
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) { found = true; validateAndSetImage(file); }
+      }
     }
     if (found) e.preventDefault();
   }
@@ -252,18 +256,28 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        if (response.status === 429 || errData.error === "MESSAGES_LIMIT_REACHED") {
+
+        // ── Límite de mensajes: 403, 429 o error explícito ──
+        if (
+          response.status === 403 ||
+          response.status === 429 ||
+          errData.error === "MESSAGES_LIMIT_REACHED" ||
+          errData.error === "LIMIT_REACHED"
+        ) {
           setPlanLimitType("messages");
           setMessages((prev) => { const u = [...prev]; if (u[u.length - 1]?.streaming) u.pop(); return u; });
           setIsLoading(false);
           return;
         }
-        if (errData.error === "IMAGES_LIMIT_REACHED") {
+
+        // ── Límite de imágenes: error explícito o 500 con imagen adjunta ──
+        if (errData.error === "IMAGES_LIMIT_REACHED" || (response.status === 500 && currentImage)) {
           setPlanLimitType("images");
           setMessages((prev) => { const u = [...prev]; if (u[u.length - 1]?.streaming) u.pop(); return u; });
           setIsLoading(false);
           return;
         }
+
         throw new Error(`Error ${response.status}`);
       }
 
@@ -319,21 +333,35 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
     navigate(`/folder/${folderId}`, { replace: true });
   }
 
+  async function removeChatFromFolder(chatId) {
+    try {
+      const token = getToken?.() || "";
+      const res = await fetch(`${API_BASE}/folder/${folderId}/chats/${chatId}`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error();
+      setChats((prev) => prev.filter((c) => (c.chatId || c.id) !== chatId));
+      if (currentChatId === chatId) {
+        setCurrentChatId(null);
+        setMessages([]);
+        navigate(`/folder/${folderId}`, { replace: true });
+      }
+    } catch (err) {
+      console.error("Error eliminando chat de la carpeta:", err);
+    }
+  }
+
   return (
     <div className="folder-chat-view">
       {planLimitType && (
-        <PlanLimitModal
-          type={planLimitType}
-          plan={userPlan}
-          onClose={() => setPlanLimitType(null)}
-        />
+        <PlanLimitModal type={planLimitType} plan={userPlan} onClose={() => setPlanLimitType(null)} />
       )}
 
       {sidebarOpen && window.innerWidth < 768 && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <div className={`chat-sidebar ${sidebarOpen ? "open" : "closed"}`}>
         <div className="chat-sidebar-header">
           <button className="btn-icon btn-back" onClick={() => navigate("/study")} title="Volver a Estudios">←</button>
@@ -346,16 +374,28 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
         </div>
         <div className="chat-list">
           {chats.length === 0 && <p className="chat-list-empty">No hay chats en esta carpeta</p>}
-          {chats.map((chat) => (
-            <div
-              key={chat.chatId || chat.id}
-              className={`chat-item ${currentChatId === (chat.chatId || chat.id) ? "active" : ""}`}
-              onClick={() => loadChat(chat.chatId || chat.id)}
-            >
-              <div className="chat-item-title">{chat.title || "Sin título"}</div>
-              <div className="chat-item-date">{chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ""}</div>
-            </div>
-          ))}
+          {chats.map((chat) => {
+            const chatId = chat.chatId || chat.id;
+            return (
+              <div
+                key={chatId}
+                className={`chat-item chat-item--removable ${currentChatId === chatId ? "active" : ""}`}
+                onClick={() => loadChat(chatId)}
+              >
+                <div className="chat-item-body">
+                  <div className="chat-item-title">{chat.title || "Sin título"}</div>
+                  <div className="chat-item-date">{chat.createdAt ? new Date(chat.createdAt).toLocaleDateString() : ""}</div>
+                </div>
+                <button
+                  className="chat-item-remove"
+                  title="Quitar de la carpeta"
+                  onClick={(e) => { e.stopPropagation(); removeChatFromFolder(chatId); }}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
         </div>
         <div className="sidebar-upgrade" onClick={() => navigate("/plans")}>
           <div className="sidebar-upgrade-glow" />
@@ -368,9 +408,7 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
         </div>
       </div>
 
-      {/* Main */}
       <div className={`chat-main ${messages.length === 0 ? "chat-main--empty" : ""}`}>
-
         {messages.length === 0 && (
           <div className="chat-empty-hero">
             <h2 className="chat-empty-hero__title">¿Cuál es el problema de hoy?</h2>
@@ -417,13 +455,11 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
             const streamingMsg = messages[messages.length - 1];
             const chars = (streamingMsg?.streaming && streamingMsg?.content?.length) || 0;
             const shrunk = Math.min(chars / 300 * 10, 60);
-            const spacerVh = Math.max(60 - shrunk, 0);
-            return <div style={{ minHeight: `${spacerVh}vh`, flexShrink: 0, transition: "min-height 0.3s ease" }} />;
+            return <div style={{ minHeight: `${Math.max(60 - shrunk, 0)}vh`, flexShrink: 0, transition: "min-height 0.3s ease" }} />;
           })()}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
         <div className={`chat-input-area ${messages.length === 0 ? "chat-input-area--centered" : ""}`}>
           {errorMsg && <p className="chat-error">{errorMsg}</p>}
 
@@ -435,9 +471,9 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
           )}
 
           <div className="chat-input-row">
-            {/* Cuadro del textarea */}
             <div className="chat-input-box">
               <textarea
+                ref={textareaRef}
                 value={problemText}
                 onChange={(e) => setProblemText(e.target.value.slice(0, MAX_CHARS))}
                 onPaste={handlePaste}
@@ -447,8 +483,6 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
                 disabled={isLoading}
                 maxLength={MAX_CHARS}
               />
-
-              {/* Toolbar */}
               <div className="chat-input-toolbar">
                 <button
                   data-tour="attach"
@@ -460,16 +494,13 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
                 >
                   📎 Adjuntar
                 </button>
-
-                {/* ── Teclado matemático ── */}
                 <MathKeyboard
+                  textareaRef={textareaRef}
                   onInsert={(sym) => setProblemText((prev) => (prev + sym).slice(0, MAX_CHARS))}
                 />
-
                 <div data-tour="model-selector">
                   <ModelSelector models={availableModels} selectedKey={selectedModel} onChange={setSelectedModel} />
                 </div>
-
                 <span className="char-counter-inline" style={{
                   color: isOverLimit ? "#e53935" : isNearLimit ? "#e57373" : "rgba(255,255,255,0.22)",
                   fontWeight: isNearLimit ? "600" : "normal",
@@ -479,7 +510,6 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
               </div>
             </div>
 
-            {/* Botones fuera del cuadro */}
             <div className="chat-input-side">
               <button
                 onClick={handleSolve}
@@ -498,8 +528,13 @@ export default function FolderChatView({ sidebarOpen, setSidebarOpen }) {
             </div>
           </div>
 
-          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }}
-            onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => validateAndSetImage(e.target.files?.[0] || null)}
+          />
         </div>
       </div>
     </div>
