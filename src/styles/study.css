@@ -3103,3 +3103,32 @@
   color: #ef4444;
   background: rgba(239, 68, 68, 0.15);
 }
+/* ── Fix mobile: folder-create-row y nudge ── */
+
+@media (max-width: 640px) {
+  .folder-create-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .folder-create-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .unorganized-nudge {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .unorganized-nudge__text {
+    flex: 1 1 100%;   /* ocupa toda la línea */
+  }
+
+  .unorganized-nudge__btn {
+    width: 100%;
+    text-align: center;
+    padding: 10px 12px;
+  }
+}
