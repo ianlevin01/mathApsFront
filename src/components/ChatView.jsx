@@ -314,12 +314,27 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
     } catch (err) { console.error(err); }
   }
 
+  const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+
+  function validateAndSetImage(file) {
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      setErrorMsg("La imagen es demasiado pesada. El límite es 10 MB.");
+      return;
+    }
+    setErrorMsg("");
+    setImageFile(file);
+  }
+
   function handlePaste(e) {
     const items = e.clipboardData?.items;
     if (!items) return;
     let found = false;
     for (const item of items) {
-      if (item.type.startsWith("image/")) { const file = item.getAsFile(); if (file) { found = true; setImageFile(file); } }
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) { found = true; validateAndSetImage(file); }
+      }
     }
     if (found) e.preventDefault();
   }
@@ -590,7 +605,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
               </button>
             </div>
           </div>
-          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => setImageFile(e.target.files?.[0] || null)} />
+          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => validateAndSetImage(e.target.files?.[0] || null)} />
         </div>
       </div>
     </div>
