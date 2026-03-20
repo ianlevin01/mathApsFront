@@ -193,7 +193,7 @@ function QuickAssignModal({ chat, folders, onAssign, onClose }) {
   );
 }
 
-// ── File Upload Modal (sin cambios, copiado tal cual) ───────────────────────
+// ── File Upload Modal ───────────────────────────────────────────────────────
 const MODAL_FILES_PAGE_SIZE = 4;
 const MAX_FILES_PER_UPLOAD = 5;
 
@@ -495,9 +495,7 @@ function FolderFilesPanel({ folderId, folderName, onUpload }) {
   );
 }
 
-// ── (resto de componentes: DailyExamModal, StreakCard sin cambios) ───────────
-// Copiados tal cual del original para no romper nada
-
+// ── Helpers ─────────────────────────────────────────────────────────────────
 function normalizeMathForExam(text) {
   if (!text) return "";
   let t = text;
@@ -773,6 +771,7 @@ function DailyExamModal({ folders, onClose, onCompleted }) {
   );
 }
 
+// ── Streak Card — con data-tour="streak-card" ────────────────────────────────
 function StreakCard({ racha, onStartExam, loading }) {
   const dias = racha?.dias ?? 0;
   const completadoHoy = racha?.completadoHoy ?? false;
@@ -790,7 +789,11 @@ function StreakCard({ racha, onStartExam, loading }) {
   const isUrgent = horasSiguiente != null && horasSiguiente <= 6 && !completadoHoy;
 
   return (
-    <div className={`streak-card ${isUrgent ? "streak-card--urgent" : ""} ${completadoHoy ? "streak-card--done" : ""}`}>
+    // ↓ data-tour agregado acá
+    <div
+      className={`streak-card ${isUrgent ? "streak-card--urgent" : ""} ${completadoHoy ? "streak-card--done" : ""}`}
+      data-tour="streak-card"
+    >
       <div className="streak-card__glow" />
       <div className="streak-card__left">
         <div className={`streak-card__flame ${flameClass}`}>🔥</div>
@@ -842,9 +845,8 @@ export default function StudyHub() {
   const [deletingFolder, setDeletingFolder] = useState(null);
   const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
 
-  // ── Plan info para carpetas bloqueadas ──
   const [foldersLimit, setFoldersLimit] = useState(null);
-  const foldersLimitRef = useRef(null); // ref para acceso sincrónico en callbacks
+  const foldersLimitRef = useRef(null);
   const [userPlan, setUserPlan] = useState("free");
   const [showFolderLimit, setShowFolderLimit] = useState(false);
 
@@ -871,14 +873,13 @@ export default function StudyHub() {
 
   useEffect(() => {
     async function initLoad() {
-      await loadUserProfile(); // perfil primero para tener foldersLimit
+      await loadUserProfile();
       loadFolders();
       loadAllChats();
       loadRacha();
     }
     initLoad();
   }, []);
-
 
   async function loadUserProfile() {
     try {
@@ -889,7 +890,7 @@ export default function StudyHub() {
       setUserPlan(data?.plan || "free");
       const limit = data?.foldersLimit ?? null;
       setFoldersLimit(limit);
-      foldersLimitRef.current = limit; // sincrónico
+      foldersLimitRef.current = limit;
       return limit;
     } catch { return null; }
   }
@@ -959,7 +960,6 @@ export default function StudyHub() {
 
   async function createFolder(name) {
     if (!name.trim()) return;
-    // Verificar límite antes de crear
     if (foldersLimit !== null && folders.length >= foldersLimit) {
       setShowFolderLimit(true);
       return;
@@ -1044,8 +1044,6 @@ export default function StudyHub() {
   const unorganizedCount = unorganizedChats.length;
   const foldersWithCounts = folders.map((f) => ({ ...f, chatCount: folderChatCounts[f.id] ?? 0 }));
 
-  // ── Determinar carpetas bloqueadas por downgrade ──
-  // Ordenar por createdAt, las más nuevas que excedan el límite están bloqueadas
   const sortedFolders = [...foldersWithCounts].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const effectiveLimit = foldersLimit ?? foldersLimitRef.current;
   const lockedFolderIds = new Set(
@@ -1082,13 +1080,16 @@ export default function StudyHub() {
       {showDailyExam && <DailyExamModal folders={foldersWithCounts.filter((f) => !lockedFolderIds.has(f.id))} onClose={() => setShowDailyExam(false)} onCompleted={handleExamCompleted} />}
 
       <div className="study-header">
-        <button className="btn-back" onClick={() => navigate("/chat")}>← Chat</button>
+        {/* ↓ data-tour="btn-back-chat" agregado acá */}
+        <button className="btn-back" data-tour="btn-back-chat" onClick={() => navigate("/chat")}>← Chat</button>
         <div className="study-header-text">
-          <h1 className="study-title shine-platinum">Mis Estudios</h1>
+          {/* ↓ data-tour="study-title" agregado acá */}
+          <h1 className="study-title shine-platinum" data-tour="study-title">Mis Estudios</h1>
           <p className="study-subtitle">Tu espacio de aprendizaje personalizado</p>
         </div>
       </div>
 
+      {/* StreakCard ya tiene data-tour="streak-card" dentro del componente */}
       {!rachaLoading && <StreakCard racha={racha} onStartExam={() => setShowDailyExam(true)} loading={rachaLoading} />}
       {rachaLoading && (
         <div className="streak-card streak-card--skeleton">
@@ -1106,12 +1107,14 @@ export default function StudyHub() {
           <div className="study-tool-card__text"><span className="study-tool-card__title">Chat Matemático</span><span className="study-tool-card__sub">Resolvé problemas con IA paso a paso</span></div>
           <span className="study-tool-card__arrow">→</span>
         </div>
-        <div className="study-tool-card study-tool-card--flash" onClick={() => { trackStudyAction("flashcards"); setPickFolderMode("flashcards"); }}>
+        {/* ↓ data-tour="tool-flashcards" agregado acá */}
+        <div className="study-tool-card study-tool-card--flash" data-tour="tool-flashcards" onClick={() => { trackStudyAction("flashcards"); setPickFolderMode("flashcards"); }}>
           <div className="study-tool-card__glow" /><div className="study-tool-card__icon-wrap"><span className="study-tool-card__icon">🧠</span></div>
           <div className="study-tool-card__text"><span className="study-tool-card__title">Flashcards</span><span className="study-tool-card__sub">Practicá con preguntas de opción múltiple</span></div>
           <span className="study-tool-card__arrow">→</span>
         </div>
-        <div className="study-tool-card study-tool-card--dev" onClick={() => { trackStudyAction("dev_questions"); setPickFolderMode("dev-questions"); }}>
+        {/* ↓ data-tour="tool-devquestions" agregado acá */}
+        <div className="study-tool-card study-tool-card--dev" data-tour="tool-devquestions" onClick={() => { trackStudyAction("dev_questions"); setPickFolderMode("dev-questions"); }}>
           <div className="study-tool-card__glow" /><div className="study-tool-card__icon-wrap"><span className="study-tool-card__icon">✍️</span></div>
           <div className="study-tool-card__text"><span className="study-tool-card__title">Preguntas a desarrollo</span><span className="study-tool-card__sub">Escribí y recibí corrección con IA</span></div>
           <span className="study-tool-card__arrow">→</span>
@@ -1199,7 +1202,8 @@ function FoldersView({
       )}
 
       <div className="folder-create-row">
-        <button className="folder-create-btn" onClick={onCreateFolder}>
+        {/* ↓ data-tour="folder-create-btn" agregado acá */}
+        <button className="folder-create-btn" data-tour="folder-create-btn" onClick={onCreateFolder}>
           <span className="folder-create-btn__icon">+</span>
           Nueva carpeta
         </button>
@@ -1232,7 +1236,6 @@ function FoldersView({
                 className="folder-card folder-card--locked"
                 style={{ animationDelay: `${i * 60}ms`, ...(color ? { background: `linear-gradient(135deg, ${color}, rgba(18,18,26,0.95))`, borderColor: color } : {}) }}
               >
-                {/* Contenido borroso */}
                 <div className="folder-card__blur-content">
                   <div className="folder-card__bg" />
                   <ProgressRing target={progress} />
@@ -1240,8 +1243,6 @@ function FoldersView({
                   <div className="folder-name">{folder.name || "Sin nombre"}</div>
                   <div className="folder-count">{folder.chatCount} chats</div>
                 </div>
-
-                {/* Badge y botones — nítidos, encima del blur */}
                 <div className="folder-lock-badge">
                   <span className="folder-lock-badge__icon">🔒</span>
                   Bloqueada
@@ -1352,7 +1353,7 @@ function FoldersView({
   );
 }
 
-// ── Progress View (sin cambios) ─────────────────────────────────────────────
+// ── Progress View ────────────────────────────────────────────────────────────
 function ProgressView({ folders, allChats, totalOrganizedChats, folderProgress, folderStats, selectedProgressFolder, loadingProgressFolder, onSelectFolder }) {
   const stats = selectedProgressFolder ? folderStats[selectedProgressFolder] : null;
   function calcDevStats(devQuestions) {

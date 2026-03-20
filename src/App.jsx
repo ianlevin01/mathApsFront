@@ -15,6 +15,7 @@ import Flashcards from "./components/Flashcards";
 import DevQuestions from "./components/DevQuestions";
 import AccountPage from "./components/AccountPage";
 import PlansPage from "./components/PlansPage";
+import OnboardingTour from "./components/OnboardingTour";
 import { getToken, removeToken } from "./auth.js";
 import { normalizeMath } from "./utils/mathUtils";
 import { interpretPlot } from "./utils/plotInterpreter";
@@ -233,6 +234,9 @@ export default function App() {
           </div>
         )}
 
+        {/* ── OnboardingTour: montado aquí para sobrevivir la navegación entre rutas ── */}
+        {isAuthenticated && <OnboardingTour autoStart={true} />}
+
         <Routes>
           <Route path="/" element={isAuthenticated ? <Navigate to="/chat" replace /> : <LandingPage onLogin={() => setShowLogin(true)} />} />
           <Route path="/terms" element={<TermsOfService />} />
@@ -273,7 +277,6 @@ function TestimonialsSection() {
     return () => clearInterval(timerRef.current);
   }, [paused]);
 
-  // Duplicamos para efecto loop visual
   const items = [...TESTIMONIALS, ...TESTIMONIALS, ...TESTIMONIALS];
 
   return (
@@ -296,7 +299,6 @@ function TestimonialsSection() {
           </div>
         </div>
 
-        {/* Slider */}
         <div
           className="lp-tslider"
           onMouseEnter={() => setPaused(true)}
@@ -339,7 +341,6 @@ function TestimonialsSection() {
           </button>
         </div>
 
-        {/* Dots */}
         <div className="lp-tslider__dots">
           {TESTIMONIALS.map((_, i) => (
             <button

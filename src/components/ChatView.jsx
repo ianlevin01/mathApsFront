@@ -7,7 +7,6 @@ import rehypeKatex from "rehype-katex";
 import { getToken, getEmailFromToken } from "../auth";
 import { normalizeMath } from "../utils/mathUtils";
 import { interpretPlot } from "../utils/plotInterpreter";
-import OnboardingTour from "./OnboardingTour";
 import PlanLimitModal from "./PlanLimitModal";
 import MathKeyboard from "./MathKeyboard";
 
@@ -314,7 +313,7 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
     } catch (err) { console.error(err); }
   }
 
-  const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
+  const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
   function validateAndSetImage(file) {
     if (!file) return;
@@ -366,8 +365,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-
-        // ── Límite de mensajes: 403 o 429 ──
         if (
           response.status === 429 ||
           response.status === 403 ||
@@ -379,15 +376,12 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
           setIsLoading(false);
           return;
         }
-
-        // ── Límite de imágenes ──
         if (errData.error === "IMAGES_LIMIT_REACHED" || (response.status === 500 && currentImage)) {
           setPlanLimitType("images");
           setMessages((prev) => { const u = [...prev]; if (u[u.length - 1]?.streaming) u.pop(); return u; });
           setIsLoading(false);
           return;
         }
-
         throw new Error(`Error ${response.status}`);
       }
 
@@ -436,7 +430,6 @@ export default function ChatView({ sidebarOpen, setSidebarOpen }) {
 
   return (
     <div className="chat-view">
-      <OnboardingTour autoStart={true} />
       {planLimitType && (
         <PlanLimitModal type={planLimitType} plan={userPlan} onClose={() => setPlanLimitType(null)} />
       )}
